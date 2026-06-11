@@ -52,6 +52,7 @@ export default async function LeaderboardPage() {
         action={
           <Button
             render={<Link href="/leaderboard/me" />}
+            nativeButton={false}
             variant="outline"
             size="sm"
           >

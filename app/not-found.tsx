@@ -16,7 +16,11 @@ export default function NotFound() {
             was a typo, maybe a stale bookmark.
           </p>
         </div>
-        <Button render={<Link href="/" />} size="sm">
+        <Button
+          render={<Link href="/" />}
+          nativeButton={false}
+          size="sm"
+        >
           Back to home
         </Button>
       </div>

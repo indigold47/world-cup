@@ -74,11 +74,17 @@ export default async function Home() {
         description="Match scores and the order each group will finish in."
         action={
           <div className="hidden gap-2 sm:flex">
-            <Button render={<Link href="/matches" />} variant="outline" size="sm">
+            <Button
+              render={<Link href="/matches" />}
+              nativeButton={false}
+              variant="outline"
+              size="sm"
+            >
               Matches
             </Button>
             <Button
               render={<Link href="/group-tables" />}
+              nativeButton={false}
               variant="outline"
               size="sm"
             >

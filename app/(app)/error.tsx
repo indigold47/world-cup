@@ -41,6 +41,7 @@ export default function ErrorBoundary({
           </Button>
           <Button
             render={<Link href="/" />}
+            nativeButton={false}
             variant="ghost"
             size="sm"
           >

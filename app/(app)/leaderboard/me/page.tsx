@@ -158,6 +158,7 @@ export default async function MyScorecardPage() {
         action={
           <Button
             render={<Link href="/leaderboard" />}
+            nativeButton={false}
             variant="ghost"
             size="sm"
           >

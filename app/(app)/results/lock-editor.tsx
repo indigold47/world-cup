@@ -22,9 +22,15 @@ function toDatetimeLocalValue(iso: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Intl spec forbids combining dateStyle/timeStyle with component options like
+// timeZoneName; Node 25 V8 throws. Use explicit components instead.
 const FORMATTER = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "full",
-  timeStyle: "short",
+  weekday: "long",
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
   timeZoneName: "short",
 });
 
