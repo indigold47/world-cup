@@ -1,36 +1,93 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Office World Cup Prediction Game
 
-## Getting Started
+A small, polished web app where colleagues sign in with their work Google
+account, predict every group-stage match of the 2026 FIFA World Cup, and
+compete on a live leaderboard. Built for one office, so it stays simple.
 
-First, run the development server:
+**Stack:** Next.js 16 (App Router) · TypeScript · Tailwind v4 · shadcn/ui ·
+Supabase (Postgres + Auth + Google SSO) · deployed on Vercel.
+
+> See `_docs/claude.md` for the full product spec and `_docs/prompts.md` for
+> the ticket-by-ticket build plan.
+
+## Local setup
+
+1. **Install dependencies**
+
+   ```bash
+   npm install
+   ```
+
+2. **Create a Supabase project**
+
+   At <https://supabase.com/dashboard>. From the project's
+   **Settings → API** page, copy the URL, the `anon` key, and the
+   `service_role` key.
+
+3. **Configure env vars**
+
+   ```bash
+   cp .env.example .env.local
+   ```
+
+   Fill in the three values. `.env.local` is gitignored.
+
+4. **Run the dev server**
+
+   ```bash
+   npm run dev
+   ```
+
+   Open <http://localhost:3000>.
+
+## Database migrations (Supabase CLI)
+
+Migrations live in `supabase/migrations/`. The schema, RLS policies, and the
+tournament seed are introduced in T2.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Link this folder to the hosted Supabase project (one-time)
+npx supabase login
+npx supabase link --project-ref <your-project-ref>
+
+# Apply pending migrations to the hosted project
+npx supabase db push
+
+# Regenerate TypeScript types after a migration
+npx supabase gen types typescript --linked > lib/supabase/database.types.ts
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tests
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm test          # Vitest, one-shot
+npm test -- --watch
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The scoring engine (T9) lives in `lib/scoring/` with its tests alongside.
 
-## Learn More
+## Deploying to Vercel
 
-To learn more about Next.js, take a look at the following resources:
+1. Push the repo to GitHub.
+2. Import it on <https://vercel.com/new>. Vercel auto-detects Next.js — no
+   custom build config needed.
+3. Paste the three env vars from `.env.local` into the Vercel project's
+   **Settings → Environment Variables** (Production + Preview).
+4. Add the Vercel deployment URL to Supabase **Auth → URL Configuration** as
+   an allowed redirect URL (T3 documents this in detail).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+That's the whole deploy story. There is no `vercel.json`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Folder structure
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+app/                  Next.js App Router pages and layouts
+components/ui/        shadcn/ui primitives
+lib/
+  supabase/           Browser + server Supabase client helpers, generated types
+  scoring/            Pure scoring functions and tests (T9)
+  utils.ts            shadcn cn() helper
+data/                 Tournament seed (added in T2)
+supabase/migrations/  SQL migrations managed by the Supabase CLI
+_docs/                Project plan: claude.md (spec) + prompts.md (tickets)
+```
