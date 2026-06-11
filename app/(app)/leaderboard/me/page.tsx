@@ -8,7 +8,7 @@ import { StatPill, ScoreBadge } from "@/components/stat-pill";
 import { flagFor, GROUP_CODES, type GroupCode } from "@/data/tournament";
 import { cn } from "@/lib/utils";
 
-export const metadata = { title: "My scorecard · Office World Cup Pool" };
+export const metadata = { title: "My scorecard · Voice123 World Cup Pool" };
 export const dynamic = "force-dynamic";
 
 // Postgres `date` arrives as "YYYY-MM-DD" → parsed as midnight UTC. Pin the

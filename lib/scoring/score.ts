@@ -1,5 +1,5 @@
 /**
- * Office World Cup — single source of truth for scoring math.
+ * Voice123 World Cup — single source of truth for scoring math.
  *
  * Pure functions only. No DB, no time, no side effects. The SQL function
  * `public.recompute_scores()` encodes the same rules; if you change the rules

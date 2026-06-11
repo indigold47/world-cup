@@ -7,7 +7,7 @@ import {
   type AdminMatchData,
 } from "./match-results-editor";
 
-export const metadata = { title: "Results · Office World Cup Pool" };
+export const metadata = { title: "Results · Voice123 World Cup Pool" };
 
 export default async function ResultsPage() {
   const supabase = await createClient();

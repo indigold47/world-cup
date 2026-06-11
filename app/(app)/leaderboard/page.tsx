@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-export const metadata = { title: "Leaderboard · Office World Cup Pool" };
+export const metadata = { title: "Leaderboard · Voice123 World Cup Pool" };
 // Always read fresh — recompute writes to the underlying tables and this page
 // should reflect the new totals immediately after admins enter results.
 export const dynamic = "force-dynamic";

@@ -1,8 +1,8 @@
-# Office World Cup Prediction Game
+# Voice123 World Cup Prediction Game
 
 A small, polished web app where colleagues sign in with their work Google
 account, predict every group-stage match of the 2026 FIFA World Cup, and
-compete on a live leaderboard. Built for one office, so it stays simple.
+compete on a live leaderboard. Built for one company, so it stays simple.
 
 **Stack:** Next.js 16 (App Router) · TypeScript · Tailwind v4 · shadcn/ui ·
 Supabase (Postgres + Auth + Google SSO) · deployed on Vercel.

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { MatchPredictor, type MatchData, type MatchPrediction } from "./match-predictor";
 
-export const metadata = { title: "Matches · Office World Cup Pool" };
+export const metadata = { title: "Matches · Voice123 World Cup Pool" };
 
 export default async function MatchesPage() {
   const supabase = await createClient();

@@ -45,7 +45,7 @@ This is what enables "Continue with Google" and restricts sign-in to
       - **User type: Internal** (Voice123 Workspace) — this alone restricts
         sign-in to @voice123.com. **Do NOT publish or verify** the consent
         screen; "Internal" is what makes the domain restriction work.
-      - App name: `Office World Cup Pool`
+      - App name: `Voice123 World Cup Pool`
       - Support email: your work address.
 - [ ] **APIs & Services → Credentials → Create credentials → OAuth client ID**
       - Application type: **Web application**

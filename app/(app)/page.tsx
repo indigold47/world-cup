@@ -47,7 +47,7 @@ export default async function Home() {
   return (
     <main className="flex flex-col gap-8 py-6 sm:py-10">
       <PageHeader
-        eyebrow="Office World Cup 2026"
+        eyebrow="Voice123 World Cup 2026"
         title={`Welcome back, ${firstName}.`}
         subtitle="Lock in your predictions before kickoff. Watch the leaderboard fill up as results come in."
       />

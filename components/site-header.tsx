@@ -20,8 +20,8 @@ export function SiteHeader({ displayName, email, isAdmin }: Props) {
         <span aria-hidden className="text-base">
           ⚽
         </span>
-        <span className="hidden sm:inline">V123 World Cup</span>
-        <span className="sm:hidden">OWC</span>
+        <span className="hidden sm:inline">Voice123 World Cup</span>
+        <span className="sm:hidden">V123</span>
       </Link>
       <div className="mx-2 hidden h-6 w-px bg-border md:block" />
       <MainNav isAdmin={isAdmin} />

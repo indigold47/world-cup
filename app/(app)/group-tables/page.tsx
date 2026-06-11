@@ -7,7 +7,7 @@ import {
   type GroupInitialOrder,
 } from "./group-tables-predictor";
 
-export const metadata = { title: "Group tables · Office World Cup Pool" };
+export const metadata = { title: "Group tables · Voice123 World Cup Pool" };
 
 export default async function GroupTablesPage() {
   const supabase = await createClient();

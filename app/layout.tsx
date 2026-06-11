@@ -11,15 +11,15 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "Office World Cup Pool",
-    template: "%s · Office World Cup Pool",
+    default: "Voice123 World Cup Pool",
+    template: "%s · Voice123 World Cup Pool",
   },
   description:
     "Predict every group-stage match and group table. Compete with your colleagues on the live leaderboard.",
-  applicationName: "Office World Cup Pool",
+  applicationName: "Voice123 World Cup Pool",
   robots: { index: false, follow: false },
   openGraph: {
-    title: "Office World Cup Pool",
+    title: "Voice123 World Cup Pool",
     description:
       "Predict every group-stage match and group table. Compete with your colleagues on the live leaderboard.",
     type: "website",
