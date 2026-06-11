@@ -11,10 +11,14 @@ import { cn } from "@/lib/utils";
 export const metadata = { title: "My scorecard · Office World Cup Pool" };
 export const dynamic = "force-dynamic";
 
+// Postgres `date` arrives as "YYYY-MM-DD" → parsed as midnight UTC. Pin the
+// formatter to UTC so the displayed weekday doesn't tick back a day in
+// negative-UTC timezones.
 const DATE_FMT = new Intl.DateTimeFormat(undefined, {
   weekday: "short",
   month: "short",
   day: "numeric",
+  timeZone: "UTC",
 });
 
 export default async function MyScorecardPage() {

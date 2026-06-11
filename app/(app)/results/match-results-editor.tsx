@@ -23,10 +23,14 @@ export type AdminMatchData = {
   status: "scheduled" | "finished";
 };
 
+// match_date is a Postgres `date` (no time), arriving as "YYYY-MM-DD".
+// new Date() treats that as midnight UTC, so renders ticked back a day in
+// negative-UTC zones. Pin to UTC to keep the displayed day truthful.
 const DATE_FMT = new Intl.DateTimeFormat(undefined, {
   weekday: "short",
   month: "short",
   day: "numeric",
+  timeZone: "UTC",
 });
 
 function formatDate(iso: string): string {

@@ -34,10 +34,14 @@ type Props = {
   lockAt: string | null;
 };
 
+// Postgres `date` columns arrive as "YYYY-MM-DD". `new Date(...)` parses them
+// as midnight UTC, which displays as the previous evening in negative-UTC
+// timezones. Pin the formatter to UTC so the displayed day matches the seed.
 const DATE_FMT = new Intl.DateTimeFormat(undefined, {
   weekday: "short",
   month: "short",
   day: "numeric",
+  timeZone: "UTC",
 });
 
 function formatDate(iso: string): string {
