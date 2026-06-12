@@ -77,7 +77,13 @@ export async function saveMatchResult(
     .eq("id", matchId);
   if (error) return { ok: false, error: error.message };
 
-  await recomputeScores();
+  const recompute = await recomputeScores();
+  if (!recompute.ok) {
+    return {
+      ok: false,
+      error: `Result saved, but scoring failed: ${recompute.error ?? "unknown error"}`,
+    };
+  }
   revalidatePath("/", "layout");
   return { ok: true };
 }
@@ -100,7 +106,13 @@ export async function clearMatchResult(matchId: number): Promise<ActionResult> {
     .eq("id", matchId);
   if (error) return { ok: false, error: error.message };
 
-  await recomputeScores();
+  const recompute = await recomputeScores();
+  if (!recompute.ok) {
+    return {
+      ok: false,
+      error: `Result cleared, but scoring failed: ${recompute.error ?? "unknown error"}`,
+    };
+  }
   revalidatePath("/", "layout");
   return { ok: true };
 }
