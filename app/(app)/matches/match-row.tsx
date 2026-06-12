@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { flagFor } from "@/data/tournament";
 import { saveMatchPrediction } from "./actions";
+import { OthersPredictionsDialog } from "./others-predictions-dialog";
 import type { MatchData, MatchPrediction } from "./match-predictor";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -137,6 +138,17 @@ export function MatchRow({
         </div>
         <TeamCell name={match.awayTeamName} side="away" />
       </div>
+
+      {locked && (
+        <div className="mt-3 flex justify-end border-t pt-2">
+          <OthersPredictionsDialog
+            matchId={match.id}
+            matchLabel={dateLabel}
+            homeTeamName={match.homeTeamName}
+            awayTeamName={match.awayTeamName}
+          />
+        </div>
+      )}
     </article>
   );
 }

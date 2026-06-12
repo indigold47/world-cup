@@ -1,9 +1,23 @@
 "use server";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export type SavePredictionResult =
   | { ok: true }
+  | { ok: false; error: string };
+
+export type OtherPrediction = {
+  userId: string;
+  displayName: string;
+  home: number;
+  away: number;
+  /** null when the match isn't finished — stored .points is 0 by default and would be misleading. */
+  points: number | null;
+};
+
+export type GetMatchPredictionsResult =
+  | { ok: true; predictions: OtherPrediction[]; matchFinished: boolean }
   | { ok: false; error: string };
 
 const MAX_GOALS = 20;
@@ -70,4 +84,91 @@ export async function saveMatchPrediction(
     .is("first_submitted_at", null);
 
   return { ok: true };
+}
+
+/**
+ * Returns every user's prediction for a single match — but only once the match
+ * is locked (either via the per-match flag or the global lock_at deadline).
+ *
+ * The new RLS policy opens cross-user SELECT after the global deadline, but
+ * per-match locks aren't reflected there yet. We do the gate here and read via
+ * the admin client so both lock kinds are covered uniformly.
+ */
+export async function getMatchPredictions(
+  matchId: number,
+): Promise<GetMatchPredictionsResult> {
+  if (!Number.isInteger(matchId)) {
+    return { ok: false, error: "Invalid match id" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "You're not signed in" };
+
+  const [settingsRes, matchRes] = await Promise.all([
+    supabase.from("settings").select("lock_at").eq("id", 1).single(),
+    supabase
+      .from("matches")
+      .select("predictions_locked, status")
+      .eq("id", matchId)
+      .single(),
+  ]);
+  if (matchRes.error || !matchRes.data) {
+    return { ok: false, error: "Match not found" };
+  }
+
+  const lockAt = settingsRes.data?.lock_at ?? null;
+  const globalLocked = lockAt
+    ? Date.now() >= new Date(lockAt).getTime()
+    : false;
+  const matchLocked = matchRes.data.predictions_locked;
+  if (!globalLocked && !matchLocked) {
+    return {
+      ok: false,
+      error: "Predictions for this match aren't visible yet",
+    };
+  }
+
+  const admin = createAdminClient();
+  const { data: rows, error: predErr } = await admin
+    .from("match_predictions")
+    .select("user_id, home_goals, away_goals, points")
+    .eq("match_id", matchId);
+  if (predErr) return { ok: false, error: predErr.message };
+
+  const matchFinished = matchRes.data.status === "finished";
+  if (!rows || rows.length === 0) {
+    return { ok: true, predictions: [], matchFinished };
+  }
+
+  const { data: profiles, error: profErr } = await admin
+    .from("profiles")
+    .select("id, display_name")
+    .in(
+      "id",
+      rows.map((r) => r.user_id),
+    );
+  if (profErr) return { ok: false, error: profErr.message };
+
+  const nameById = new Map(
+    (profiles ?? []).map((p) => [p.id, p.display_name]),
+  );
+
+  const predictions: OtherPrediction[] = rows.map((r) => ({
+    userId: r.user_id,
+    displayName: nameById.get(r.user_id) ?? "Unknown",
+    home: r.home_goals,
+    away: r.away_goals,
+    points: matchFinished ? r.points : null,
+  }));
+  predictions.sort((a, b) => {
+    const pa = a.points ?? -1;
+    const pb = b.points ?? -1;
+    if (pa !== pb) return pb - pa;
+    return a.displayName.localeCompare(b.displayName);
+  });
+
+  return { ok: true, predictions, matchFinished };
 }
