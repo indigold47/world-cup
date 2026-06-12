@@ -15,6 +15,8 @@ type Props = {
   dateLabel: string;
   initial: MatchPrediction | undefined;
   locked: boolean;
+  /** True when this match is individually locked by admin (and the global deadline has not yet passed). */
+  matchLocked?: boolean;
   onPredictionStateChange: (matchId: number, complete: boolean) => void;
 };
 
@@ -33,6 +35,7 @@ export function MatchRow({
   dateLabel,
   initial,
   locked,
+  matchLocked = false,
   onPredictionStateChange,
 }: Props) {
   const [home, setHome] = useState<string>(
@@ -107,7 +110,12 @@ export function MatchRow({
         <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
           {dateLabel}
         </span>
-        <SaveIndicator status={status} complete={isComplete} locked={locked} />
+        <SaveIndicator
+          status={status}
+          complete={isComplete}
+          locked={locked}
+          matchLocked={matchLocked}
+        />
       </div>
 
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
@@ -196,10 +204,12 @@ function SaveIndicator({
   status,
   complete,
   locked,
+  matchLocked,
 }: {
   status: SaveStatus;
   complete: boolean;
   locked: boolean;
+  matchLocked: boolean;
 }) {
   // aria-live=polite so screen readers announce save state changes
   // (saving → saved / failed) without interrupting the user.
@@ -213,7 +223,12 @@ function SaveIndicator({
     </span>
   );
 
-  if (locked) return wrap("Locked", "text-muted-foreground");
+  if (locked) {
+    return wrap(
+      matchLocked ? "Predictions blocked" : "Locked",
+      "text-muted-foreground",
+    );
+  }
   if (status === "saving") {
     return wrap(
       <>

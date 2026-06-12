@@ -81,9 +81,33 @@ export async function saveMatchResult(
   if (!recompute.ok) {
     return {
       ok: false,
-      error: `Result saved, but scoring failed: ${recompute.error ?? "unknown error"}`,
+      error: `Result saved, but scoring failed: ${recompute.error}`,
     };
   }
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export async function setMatchPredictionLock(
+  matchId: number,
+  locked: boolean,
+): Promise<ActionResult> {
+  if (!Number.isInteger(matchId)) {
+    return { ok: false, error: "Invalid match id" };
+  }
+  if (typeof locked !== "boolean") {
+    return { ok: false, error: "Invalid lock state" };
+  }
+
+  const { supabase, error: adminError } = await requireAdmin();
+  if (adminError) return { ok: false, error: adminError };
+
+  const { error } = await supabase
+    .from("matches")
+    .update({ predictions_locked: locked })
+    .eq("id", matchId);
+  if (error) return { ok: false, error: error.message };
+
   revalidatePath("/", "layout");
   return { ok: true };
 }
@@ -110,7 +134,7 @@ export async function clearMatchResult(matchId: number): Promise<ActionResult> {
   if (!recompute.ok) {
     return {
       ok: false,
-      error: `Result cleared, but scoring failed: ${recompute.error ?? "unknown error"}`,
+      error: `Result cleared, but scoring failed: ${recompute.error}`,
     };
   }
   revalidatePath("/", "layout");

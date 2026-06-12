@@ -162,6 +162,7 @@ export type Database = {
           id: number
           match_date: string
           match_no: number
+          predictions_locked: boolean
           status: string
         }
         Insert: {
@@ -173,6 +174,7 @@ export type Database = {
           id?: number
           match_date: string
           match_no: number
+          predictions_locked?: boolean
           status?: string
         }
         Update: {
@@ -184,6 +186,7 @@ export type Database = {
           id?: number
           match_date?: string
           match_no?: number
+          predictions_locked?: boolean
           status?: string
         }
         Relationships: [
@@ -265,19 +268,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_leaderboard: {
-        Args: never
-        Returns: {
-          display_name: string
-          exact_hits: number
-          first_submitted_at: string
-          rank: number
-          total_points: number
-          user_id: string
-        }[]
-      }
       is_admin: { Args: never; Returns: boolean }
-      recompute_scores: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

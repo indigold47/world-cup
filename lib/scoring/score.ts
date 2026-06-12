@@ -1,9 +1,9 @@
 /**
  * Voice123 World Cup — single source of truth for scoring math.
  *
- * Pure functions only. No DB, no time, no side effects. The SQL function
- * `public.recompute_scores()` encodes the same rules; if you change the rules
- * here you must also update the migration that defines that function.
+ * Pure functions only. No DB, no time, no side effects. Consumed by
+ * lib/scoring/leaderboard.ts at request time — scoring no longer happens
+ * in SQL.
  *
  * Rules (from _docs/claude.md §5):
  *

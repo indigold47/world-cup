@@ -20,6 +20,7 @@ export type MatchData = {
   date: string;
   homeTeamName: string;
   awayTeamName: string;
+  predictionsLocked: boolean;
 };
 
 export type MatchPrediction = {
@@ -147,7 +148,8 @@ export function MatchPredictor({
                   match={m}
                   dateLabel={formatDate(m.date)}
                   initial={initialPredictions[m.id]}
-                  locked={isLocked}
+                  locked={isLocked || m.predictionsLocked}
+                  matchLocked={m.predictionsLocked && !isLocked}
                   onPredictionStateChange={handlePredictionStateChange}
                 />
               ))}

@@ -1,14 +1,11 @@
 /**
  * Pure derivation of the actual final group standings from finished matches.
- *
- * The SQL function `public.recompute_scores()` encodes the same logic for the
- * live recompute path — keep this file and that function in sync.
+ * Consumed by lib/scoring/leaderboard.ts at request time.
  *
  * Tie-break: points (3 / 1 / 0) → goal difference (GF − GA) → goals scored (GF).
  * We intentionally stop at goals scored — no head-to-head, no fair-play, no
  * drawing of lots. Real-world ties this deep in 6-match groups are vanishingly
- * rare; if it happens, the admin can patch actual_group_standings directly in
- * the Supabase dashboard before the next recompute.
+ * rare; if it happens, the admin can post-adjust by tweaking a match score.
  */
 
 export type FinishedMatch = {

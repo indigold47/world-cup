@@ -21,6 +21,7 @@ export type AdminMatchData = {
   homeGoals: number | null;
   awayGoals: number | null;
   status: "scheduled" | "finished";
+  predictionsLocked: boolean;
 };
 
 // match_date is a Postgres `date` (no time), arriving as "YYYY-MM-DD".

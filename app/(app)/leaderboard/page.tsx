@@ -2,26 +2,19 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Trophy, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { rankLeaderboard } from "@/lib/scoring/leaderboard";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Leaderboard · Voice123 World Cup Pool" };
-// Always read fresh — recompute writes to the underlying tables and this page
-// should reflect the new totals immediately after admins enter results.
+// Always read fresh — recomputeScores writes to the prediction cache and this
+// page should reflect the new totals immediately after admins enter results.
 export const dynamic = "force-dynamic";
-
-type LeaderboardRow = {
-  user_id: string;
-  display_name: string;
-  first_submitted_at: string | null;
-  total_points: number;
-  exact_hits: number;
-  rank: number;
-};
 
 function initialsOf(name: string): string {
   return name
@@ -39,8 +32,28 @@ export default async function LeaderboardPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/sign-in");
 
-  const { data, error } = await supabase.rpc("get_leaderboard");
-  const rows = (data ?? []) as LeaderboardRow[];
+  // Cross-user read: bypass RLS via service role. The "own only" SELECT
+  // policy on predictions is correct for general user access (don't leak
+  // others' picks pre-deadline), but the leaderboard is a server-only
+  // aggregation that's already part of the in-pool experience, so it can
+  // read everyone's points.
+  const admin = createAdminClient();
+  const [profilesRes, matchPredsRes, groupPredsRes] = await Promise.all([
+    admin.from("profiles").select("id, display_name, first_submitted_at"),
+    admin.from("match_predictions").select("user_id, points"),
+    admin.from("group_table_predictions").select("user_id, points"),
+  ]);
+
+  const firstError =
+    profilesRes.error ?? matchPredsRes.error ?? groupPredsRes.error;
+
+  const rows = firstError
+    ? []
+    : rankLeaderboard({
+        profiles: profilesRes.data ?? [],
+        matchPredictions: matchPredsRes.data ?? [],
+        groupPredictions: groupPredsRes.data ?? [],
+      });
   const anyPoints = rows.some((r) => r.total_points > 0);
 
   return (
@@ -61,12 +74,12 @@ export default async function LeaderboardPage() {
         }
       />
 
-      {error && (
+      {firstError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
           <p className="font-medium text-destructive">
             Couldn&apos;t load the leaderboard
           </p>
-          <p className="text-destructive/80">{error.message}</p>
+          <p className="text-destructive/80">{firstError.message}</p>
         </div>
       )}
 
@@ -101,7 +114,13 @@ function LeaderboardRow({
   row,
   isCurrentUser,
 }: {
-  row: LeaderboardRow;
+  row: {
+    user_id: string;
+    display_name: string;
+    total_points: number;
+    exact_hits: number;
+    rank: number;
+  };
   isCurrentUser: boolean;
 }) {
   const podium = row.rank <= 3 && row.total_points > 0;

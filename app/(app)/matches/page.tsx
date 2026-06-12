@@ -16,7 +16,9 @@ export default async function MatchesPage() {
     supabase.from("teams").select("id, name, group_code"),
     supabase
       .from("matches")
-      .select("id, match_no, group_code, match_date, home_team_id, away_team_id")
+      .select(
+        "id, match_no, group_code, match_date, home_team_id, away_team_id, predictions_locked",
+      )
       .order("match_date")
       .order("match_no"),
     supabase
@@ -40,6 +42,7 @@ export default async function MatchesPage() {
     date: m.match_date,
     homeTeamName: teamsById.get(m.home_team_id)?.name ?? "—",
     awayTeamName: teamsById.get(m.away_team_id)?.name ?? "—",
+    predictionsLocked: m.predictions_locked,
   }));
 
   const predictions: Record<number, MatchPrediction> = {};

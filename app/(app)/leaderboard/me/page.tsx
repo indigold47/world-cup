@@ -2,10 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Sparkles, Check, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { StatPill, ScoreBadge } from "@/components/stat-pill";
 import { flagFor, GROUP_CODES, type GroupCode } from "@/data/tournament";
+import { rankLeaderboard } from "@/lib/scoring/leaderboard";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "My scorecard · Voice123 World Cup Pool" };
@@ -28,14 +30,21 @@ export default async function MyScorecardPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/sign-in");
 
+  // Cross-user reads (profiles, the all-users prediction summaries used to
+  // compute your rank) go through the service-role client so they bypass the
+  // "own only" RLS policy. Per-user reads stay on the session client.
+  const admin = createAdminClient();
   const [
+    profilesRes,
     teamsRes,
     matchesRes,
     matchPredictionsRes,
     groupPredictionsRes,
     standingsRes,
-    leaderboardRes,
+    allMatchPredsRes,
+    allGroupPredsRes,
   ] = await Promise.all([
+    admin.from("profiles").select("id, display_name, first_submitted_at"),
     supabase.from("teams").select("id, name, group_code"),
     supabase
       .from("matches")
@@ -55,7 +64,8 @@ export default async function MyScorecardPage() {
     supabase
       .from("actual_group_standings")
       .select("group_code, team_id, final_rank"),
-    supabase.rpc("get_leaderboard"),
+    admin.from("match_predictions").select("user_id, points"),
+    admin.from("group_table_predictions").select("user_id, points"),
   ]);
 
   const teamsById = new Map<number, { name: string; group_code: string }>(
@@ -141,13 +151,13 @@ export default async function MyScorecardPage() {
   ).length;
   const totalPoints = matchTotal + groupTotal;
 
-  // My leaderboard rank
-  const lbRows = (leaderboardRes.data ?? []) as Array<{
-    user_id: string;
-    rank: number;
-    total_points: number;
-  }>;
-  const myLb = lbRows.find((r) => r.user_id === user.id);
+  // My leaderboard rank — compute the leaderboard from the same cached data.
+  const leaderboard = rankLeaderboard({
+    profiles: profilesRes.data ?? [],
+    matchPredictions: allMatchPredsRes.data ?? [],
+    groupPredictions: allGroupPredsRes.data ?? [],
+  });
+  const myLb = leaderboard.find((r) => r.user_id === user.id);
 
   return (
     <main className="flex flex-col gap-6 py-6 sm:py-10">

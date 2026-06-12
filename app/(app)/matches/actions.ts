@@ -32,16 +32,22 @@ export async function saveMatchPrediction(
 
   // Defensive lock check — the DB trigger also enforces it, but we want
   // a friendly message instead of a Postgres error string.
-  const { data: settings } = await supabase
-    .from("settings")
-    .select("lock_at")
-    .eq("id", 1)
-    .single();
+  const [{ data: settings }, { data: match }] = await Promise.all([
+    supabase.from("settings").select("lock_at").eq("id", 1).single(),
+    supabase
+      .from("matches")
+      .select("predictions_locked")
+      .eq("id", matchId)
+      .single(),
+  ]);
   if (
     settings?.lock_at &&
     Date.now() >= new Date(settings.lock_at).getTime()
   ) {
     return { ok: false, error: "Predictions are locked" };
+  }
+  if (match?.predictions_locked) {
+    return { ok: false, error: "Predictions for this match are locked" };
   }
 
   const { error: upsertError } = await supabase.from("match_predictions").upsert(

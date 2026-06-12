@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Check, AlertCircle, Loader2 } from "lucide-react";
+import { Check, AlertCircle, Loader2, Lock, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { flagFor } from "@/data/tournament";
 import { Button } from "@/components/ui/button";
-import { saveMatchResult, clearMatchResult } from "./actions";
+import {
+  saveMatchResult,
+  clearMatchResult,
+  setMatchPredictionLock,
+} from "./actions";
 import type { AdminMatchData } from "./match-results-editor";
 
 type Status = "idle" | "saving" | "saved" | "error";
@@ -36,6 +40,10 @@ export function MatchResultRow({ match, dateLabel }: Props) {
   const [pending, startTransition] = useTransition();
   const [confirmingClear, setConfirmingClear] = useState(false);
   const clearResetTimer = useRef<number | null>(null);
+  const [predictionsLocked, setPredictionsLocked] = useState(
+    match.predictionsLocked,
+  );
+  const [lockPending, startLockTransition] = useTransition();
 
   // Reset "Saved" indicator after a moment.
   useEffect(() => {
@@ -66,6 +74,21 @@ export function MatchResultRow({ match, dateLabel }: Props) {
       } else {
         setStatus("error");
         toast.error("Couldn't save result", { description: result.error });
+      }
+    });
+  }
+
+  function handleToggleLock() {
+    const next = !predictionsLocked;
+    startLockTransition(async () => {
+      const result = await setMatchPredictionLock(match.id, next);
+      if (result.ok) {
+        setPredictionsLocked(next);
+        toast.success(
+          next ? "Predictions blocked for this match" : "Predictions unblocked",
+        );
+      } else {
+        toast.error("Couldn't update lock", { description: result.error });
       }
     });
   }
@@ -105,8 +128,15 @@ export function MatchResultRow({ match, dateLabel }: Props) {
       aria-label={`Match ${match.matchNo}: ${match.homeTeamName} vs ${match.awayTeamName}`}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          {dateLabel} · #{match.matchNo}
+        <span className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <span>
+            {dateLabel} · #{match.matchNo}
+          </span>
+          {predictionsLocked && (
+            <span className="inline-flex items-center gap-1 rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+              <Lock className="h-3 w-3" aria-hidden /> Predictions blocked
+            </span>
+          )}
         </span>
         <StatusIndicator
           status={status}
@@ -136,6 +166,26 @@ export function MatchResultRow({ match, dateLabel }: Props) {
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={lockPending}
+          onClick={handleToggleLock}
+          className="mr-auto"
+        >
+          {predictionsLocked ? (
+            <>
+              <Unlock className="h-3.5 w-3.5" aria-hidden />
+              Unblock predictions
+            </>
+          ) : (
+            <>
+              <Lock className="h-3.5 w-3.5" aria-hidden />
+              Block predictions
+            </>
+          )}
+        </Button>
         {isFinished && (
           <Button
             type="button"

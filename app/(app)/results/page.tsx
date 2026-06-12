@@ -30,7 +30,7 @@ export default async function ResultsPage() {
     supabase
       .from("matches")
       .select(
-        "id, match_no, group_code, match_date, home_team_id, away_team_id, home_goals, away_goals, status",
+        "id, match_no, group_code, match_date, home_team_id, away_team_id, home_goals, away_goals, status, predictions_locked",
       )
       .order("match_date")
       .order("match_no"),
@@ -50,6 +50,7 @@ export default async function ResultsPage() {
     homeGoals: m.home_goals,
     awayGoals: m.away_goals,
     status: m.status === "finished" ? "finished" : "scheduled",
+    predictionsLocked: m.predictions_locked,
   }));
 
   return (
