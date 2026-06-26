@@ -49,6 +49,7 @@ export async function recomputeScores(): Promise<RecomputeResult> {
 
   const matches: ScoringMatch[] = (matchesRes.data ?? []).map((m) => ({
     id: m.id,
+    // Knockout rows now carry null here; deriveActualStandings skips them.
     group_code: m.group_code,
     home_team_id: m.home_team_id,
     away_team_id: m.away_team_id,

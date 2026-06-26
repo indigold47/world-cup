@@ -26,10 +26,13 @@ export default async function Home() {
         .eq("id", user.id)
         .single(),
       supabase.from("settings").select("lock_at").eq("id", 1).single(),
+      // Inner-join against matches so we only count predictions on group-stage
+      // fixtures — the TOTAL_MATCHES denominator below is fixed at 72.
       supabase
         .from("match_predictions")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id),
+        .select("id, matches!inner(match_no)", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .lte("matches.match_no", 72),
       supabase
         .from("group_table_predictions")
         .select("group_code", { count: "exact", head: false })

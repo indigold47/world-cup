@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
+import { roundFromMatchNo } from "@/data/tournament";
 import { MatchPredictor, type MatchData, type MatchPrediction } from "./match-predictor";
 
 export const metadata = { title: "Matches · Voice123 World Cup Pool" };
@@ -14,12 +15,12 @@ export default async function MatchesPage() {
 
   const [teamsRes, matchesRes, predictionsRes, settingsRes] = await Promise.all([
     supabase.from("teams").select("id, name, group_code"),
+    // Round is derived from match_no — no schema column required.
     supabase
       .from("matches")
       .select(
         "id, match_no, group_code, match_date, home_team_id, away_team_id, predictions_locked",
       )
-      .order("match_date")
       .order("match_no"),
     supabase
       .from("match_predictions")
@@ -38,10 +39,11 @@ export default async function MatchesPage() {
   const matches: MatchData[] = (matchesRes.data ?? []).map((m) => ({
     id: m.id,
     matchNo: m.match_no,
+    round: roundFromMatchNo(m.match_no),
     groupCode: m.group_code,
     date: m.match_date,
-    homeTeamName: teamsById.get(m.home_team_id)?.name ?? "—",
-    awayTeamName: teamsById.get(m.away_team_id)?.name ?? "—",
+    homeTeamName: m.home_team_id != null ? teamsById.get(m.home_team_id)?.name ?? null : null,
+    awayTeamName: m.away_team_id != null ? teamsById.get(m.away_team_id)?.name ?? null : null,
     predictionsLocked: m.predictions_locked,
   }));
 
@@ -56,9 +58,9 @@ export default async function MatchesPage() {
   return (
     <main className="flex flex-col gap-6 py-6 sm:py-10">
       <PageHeader
-        eyebrow="Group stage"
-        title="Predict every match"
-        subtitle="Tap a tab to jump between groups. Your picks save automatically."
+        eyebrow="Predict every match"
+        title="Matches"
+        subtitle="Group stage first, then knockout. Your picks save automatically."
       />
       <MatchPredictor
         matches={matches}

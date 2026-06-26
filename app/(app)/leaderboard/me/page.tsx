@@ -6,7 +6,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { StatPill, ScoreBadge } from "@/components/stat-pill";
-import { flagFor, GROUP_CODES, type GroupCode } from "@/data/tournament";
+import {
+  flagFor,
+  GROUP_CODES,
+  KNOCKOUT_ROUNDS,
+  ROUND_LABELS,
+  roundFromMatchNo,
+  type GroupCode,
+  type KnockoutRound,
+} from "@/data/tournament";
 import { rankLeaderboard } from "@/lib/scoring/leaderboard";
 import { cn } from "@/lib/utils";
 
@@ -46,12 +54,12 @@ export default async function MyScorecardPage() {
   ] = await Promise.all([
     admin.from("profiles").select("id, display_name, first_submitted_at"),
     supabase.from("teams").select("id, name, group_code"),
+    // Round derived from match_no — no schema column required.
     supabase
       .from("matches")
       .select(
         "id, match_no, group_code, match_date, home_team_id, away_team_id, home_goals, away_goals, status",
       )
-      .order("match_date")
       .order("match_no"),
     supabase
       .from("match_predictions")
@@ -64,7 +72,7 @@ export default async function MyScorecardPage() {
     supabase
       .from("actual_group_standings")
       .select("group_code, team_id, final_rank"),
-    admin.from("match_predictions").select("user_id, points"),
+    admin.from("match_predictions").select("user_id, match_id, points"),
     admin.from("group_table_predictions").select("user_id, points"),
   ]);
 
@@ -86,11 +94,12 @@ export default async function MyScorecardPage() {
     });
   }
 
-  // Group user's match rows by group code, in match-date order
+  // Group user's match rows by group code, in match-date order. Knockout rows
+  // (round !== 'GROUP') get bucketed by round instead.
   type RowMatch = {
     matchId: number;
     matchNo: number;
-    date: string;
+    date: string | null;
     homeName: string;
     awayName: string;
     homeActual: number | null;
@@ -100,19 +109,33 @@ export default async function MyScorecardPage() {
   };
   const matchesByGroup = new Map<GroupCode, RowMatch[]>();
   for (const code of GROUP_CODES) matchesByGroup.set(code, []);
+  const matchesByKnockout = new Map<KnockoutRound, RowMatch[]>();
+  for (const r of KNOCKOUT_ROUNDS) matchesByKnockout.set(r, []);
+
   for (const m of matchesRes.data ?? []) {
-    const code = m.group_code as GroupCode;
-    matchesByGroup.get(code)?.push({
+    const row: RowMatch = {
       matchId: m.id,
       matchNo: m.match_no,
       date: m.match_date,
-      homeName: teamsById.get(m.home_team_id)?.name ?? "—",
-      awayName: teamsById.get(m.away_team_id)?.name ?? "—",
+      homeName:
+        m.home_team_id != null
+          ? teamsById.get(m.home_team_id)?.name ?? "—"
+          : "TBD",
+      awayName:
+        m.away_team_id != null
+          ? teamsById.get(m.away_team_id)?.name ?? "—"
+          : "TBD",
       homeActual: m.home_goals,
       awayActual: m.away_goals,
       finished: m.status === "finished",
       predicted: myMatchPred.get(m.id),
-    });
+    };
+    const round = roundFromMatchNo(m.match_no);
+    if (round === "GROUP") {
+      matchesByGroup.get(m.group_code as GroupCode)?.push(row);
+    } else {
+      matchesByKnockout.get(round)?.push(row);
+    }
   }
 
   // Group predictions / actual standings
@@ -137,25 +160,36 @@ export default async function MyScorecardPage() {
     actualStandings.get(s.group_code)!.set(s.team_id, s.final_rank);
   }
 
+  // Round lookup so we can split user's match points group vs knockout.
+  const matchStageById = new Map<number, "group" | "knockout">();
+  for (const m of matchesRes.data ?? []) {
+    matchStageById.set(m.id, m.match_no <= 72 ? "group" : "knockout");
+  }
+
   // Totals
-  const matchTotal = (matchPredictionsRes.data ?? []).reduce(
-    (n, p) => n + p.points,
-    0,
-  );
-  const groupTotal = (groupPredictionsRes.data ?? []).reduce(
+  const groupMatchTotal = (matchPredictionsRes.data ?? [])
+    .filter((p) => matchStageById.get(p.match_id) !== "knockout")
+    .reduce((n, p) => n + p.points, 0);
+  const knockoutMatchTotal = (matchPredictionsRes.data ?? [])
+    .filter((p) => matchStageById.get(p.match_id) === "knockout")
+    .reduce((n, p) => n + p.points, 0);
+  const groupTableTotal = (groupPredictionsRes.data ?? []).reduce(
     (n, p) => n + p.points,
     0,
   );
   const exactHits = (matchPredictionsRes.data ?? []).filter(
     (p) => p.points === 5,
   ).length;
-  const totalPoints = matchTotal + groupTotal;
+  const totalPoints = groupMatchTotal + knockoutMatchTotal + groupTableTotal;
 
-  // My leaderboard rank — compute the leaderboard from the same cached data.
+  // My leaderboard rank — compute the (all-stages) leaderboard from the same
+  // cached data so it matches the default view on /leaderboard.
   const leaderboard = rankLeaderboard({
     profiles: profilesRes.data ?? [],
     matchPredictions: allMatchPredsRes.data ?? [],
     groupPredictions: allGroupPredsRes.data ?? [],
+    matchStageById,
+    stage: "all",
   });
   const myLb = leaderboard.find((r) => r.user_id === user.id);
 
@@ -177,15 +211,16 @@ export default async function MyScorecardPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <StatPill
           label="Total points"
           value={totalPoints}
           hint={myLb ? `Rank ${myLb.rank}` : undefined}
           variant={totalPoints > 0 ? "success" : "default"}
         />
-        <StatPill label="From matches" value={matchTotal} />
-        <StatPill label="From groups" value={groupTotal} />
+        <StatPill label="Group matches" value={groupMatchTotal} />
+        <StatPill label="Knockout matches" value={knockoutMatchTotal} />
+        <StatPill label="From groups" value={groupTableTotal} />
         <StatPill
           label="Exact scores"
           value={exactHits}
@@ -195,7 +230,7 @@ export default async function MyScorecardPage() {
 
       <section className="space-y-4">
         <h2 className="text-lg font-semibold tracking-tight">
-          Match predictions
+          Group-stage match predictions
         </h2>
         {GROUP_CODES.map((code) => {
           const matches = matchesByGroup.get(code) ?? [];
@@ -212,6 +247,35 @@ export default async function MyScorecardPage() {
                 <h3 className="text-sm font-semibold">
                   <span className="text-muted-foreground">Group</span> {code}
                 </h3>
+                <span className="text-sm font-semibold tabular-nums">
+                  +{subtotal}
+                </span>
+              </header>
+              <ul className="space-y-2">
+                {matches.map((m) => (
+                  <MatchScorecardRow key={m.matchId} m={m} />
+                ))}
+              </ul>
+            </article>
+          );
+        })}
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold tracking-tight">
+          Knockout match predictions
+        </h2>
+        {KNOCKOUT_ROUNDS.map((r) => {
+          const matches = matchesByKnockout.get(r) ?? [];
+          if (matches.length === 0) return null;
+          const subtotal = matches.reduce(
+            (n, m) => n + (m.predicted?.points ?? 0),
+            0,
+          );
+          return (
+            <article key={r} className="rounded-lg border bg-card p-3 sm:p-4">
+              <header className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold">{ROUND_LABELS[r]}</h3>
                 <span className="text-sm font-semibold tabular-nums">
                   +{subtotal}
                 </span>
@@ -313,7 +377,7 @@ function MatchScorecardRow({
   m: {
     matchId: number;
     matchNo: number;
-    date: string;
+    date: string | null;
     homeName: string;
     awayName: string;
     homeActual: number | null;
@@ -322,7 +386,7 @@ function MatchScorecardRow({
     predicted?: { home: number; away: number; points: number };
   };
 }) {
-  const dateLabel = DATE_FMT.format(new Date(m.date));
+  const dateLabel = m.date ? DATE_FMT.format(new Date(m.date)) : "Date TBD";
   const exact = m.predicted?.points === 5;
   const outcome = m.predicted && m.predicted.points === 2;
 

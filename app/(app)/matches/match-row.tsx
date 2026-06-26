@@ -18,6 +18,8 @@ type Props = {
   locked: boolean;
   /** True when this match is individually locked by admin (and the global deadline has not yet passed). */
   matchLocked?: boolean;
+  /** True for knockout rows whose opponents aren't decided yet. Row is non-interactive. */
+  tbd?: boolean;
   onPredictionStateChange: (matchId: number, complete: boolean) => void;
 };
 
@@ -37,8 +39,11 @@ export function MatchRow({
   initial,
   locked,
   matchLocked = false,
+  tbd = false,
   onPredictionStateChange,
 }: Props) {
+  const homeName = match.homeTeamName ?? "TBD";
+  const awayName = match.awayTeamName ?? "TBD";
   const [home, setHome] = useState<string>(
     initial ? String(initial.home) : "",
   );
@@ -102,10 +107,11 @@ export function MatchRow({
     <article
       className={cn(
         "rounded-lg border bg-card p-3 sm:p-4 transition-colors",
-        !isComplete && !locked && "border-dashed",
+        !isComplete && !locked && !tbd && "border-dashed",
         locked && "opacity-90",
+        tbd && "border-dashed bg-muted/30",
       )}
-      aria-label={`Match ${match.matchNo}: ${match.homeTeamName} vs ${match.awayTeamName}`}
+      aria-label={`Match ${match.matchNo}: ${homeName} vs ${awayName}`}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -116,36 +122,37 @@ export function MatchRow({
           complete={isComplete}
           locked={locked}
           matchLocked={matchLocked}
+          tbd={tbd}
         />
       </div>
 
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
-        <TeamCell name={match.homeTeamName} side="home" />
+        <TeamCell name={homeName} side="home" />
         <div className="flex items-center gap-1.5 sm:gap-2">
           <GoalInput
-            label={`${match.homeTeamName} goals`}
+            label={`${homeName} goals`}
             value={home}
             onChange={setHome}
             disabled={locked}
           />
           <span className="text-base font-medium text-muted-foreground">:</span>
           <GoalInput
-            label={`${match.awayTeamName} goals`}
+            label={`${awayName} goals`}
             value={away}
             onChange={setAway}
             disabled={locked}
           />
         </div>
-        <TeamCell name={match.awayTeamName} side="away" />
+        <TeamCell name={awayName} side="away" />
       </div>
 
-      {locked && (
+      {locked && !tbd && (
         <div className="mt-3 flex justify-end border-t pt-2">
           <OthersPredictionsDialog
             matchId={match.id}
             matchLabel={dateLabel}
-            homeTeamName={match.homeTeamName}
-            awayTeamName={match.awayTeamName}
+            homeTeamName={homeName}
+            awayTeamName={awayName}
           />
         </div>
       )}
@@ -217,11 +224,13 @@ function SaveIndicator({
   complete,
   locked,
   matchLocked,
+  tbd,
 }: {
   status: SaveStatus;
   complete: boolean;
   locked: boolean;
   matchLocked: boolean;
+  tbd: boolean;
 }) {
   // aria-live=polite so screen readers announce save state changes
   // (saving → saved / failed) without interrupting the user.
@@ -235,6 +244,9 @@ function SaveIndicator({
     </span>
   );
 
+  if (tbd) {
+    return wrap("Awaiting opponents", "text-muted-foreground");
+  }
   if (locked) {
     return wrap(
       matchLocked ? "Predictions blocked" : "Locked",

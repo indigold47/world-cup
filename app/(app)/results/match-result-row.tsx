@@ -10,14 +10,17 @@ import {
   saveMatchResult,
   clearMatchResult,
   setMatchPredictionLock,
+  setKnockoutTeams,
 } from "./actions";
-import type { AdminMatchData } from "./match-results-editor";
+import type { AdminMatchData, TeamOption } from "./match-results-editor";
 
 type Status = "idle" | "saving" | "saved" | "error";
 
 type Props = {
   match: AdminMatchData;
   dateLabel: string;
+  /** Provided for knockout rows so admins can fill TBD slots. */
+  teamOptions?: TeamOption[];
 };
 
 const MAX_GOALS = 30;
@@ -29,7 +32,7 @@ function parseGoal(value: string): number | null {
   return n;
 }
 
-export function MatchResultRow({ match, dateLabel }: Props) {
+export function MatchResultRow({ match, dateLabel, teamOptions }: Props) {
   const [home, setHome] = useState<string>(
     match.homeGoals == null ? "" : String(match.homeGoals),
   );
@@ -44,6 +47,19 @@ export function MatchResultRow({ match, dateLabel }: Props) {
     match.predictionsLocked,
   );
   const [lockPending, startLockTransition] = useTransition();
+  const [homeTeamId, setHomeTeamId] = useState<number | null>(match.homeTeamId);
+  const [awayTeamId, setAwayTeamId] = useState<number | null>(match.awayTeamId);
+  const [teamPending, startTeamTransition] = useTransition();
+
+  const isKnockout = match.round !== "GROUP";
+  const teamsAssigned = homeTeamId != null && awayTeamId != null;
+  const teamsDirty =
+    homeTeamId !== match.homeTeamId || awayTeamId !== match.awayTeamId;
+
+  const homeTeamName =
+    teamOptions?.find((t) => t.id === homeTeamId)?.name ?? match.homeTeamName;
+  const awayTeamName =
+    teamOptions?.find((t) => t.id === awayTeamId)?.name ?? match.awayTeamName;
 
   // Reset "Saved" indicator after a moment.
   useEffect(() => {
@@ -93,6 +109,25 @@ export function MatchResultRow({ match, dateLabel }: Props) {
     });
   }
 
+  function handleSaveTeams() {
+    if (!teamsDirty) return;
+    if (homeTeamId != null && homeTeamId === awayTeamId) {
+      toast.error("Home and away teams must differ");
+      return;
+    }
+    startTeamTransition(async () => {
+      const result = await setKnockoutTeams(match.id, homeTeamId, awayTeamId);
+      if (result.ok) {
+        toast.success("Knockout matchup updated");
+      } else {
+        toast.error("Couldn't update teams", { description: result.error });
+        // Revert local state so the UI matches the server.
+        setHomeTeamId(match.homeTeamId);
+        setAwayTeamId(match.awayTeamId);
+      }
+    });
+  }
+
   function handleClearTap() {
     if (!confirmingClear) {
       setConfirmingClear(true);
@@ -125,12 +160,17 @@ export function MatchResultRow({ match, dateLabel }: Props) {
         isFinished && !dirty && "border-success/40 bg-success/5",
         !isFinished && "border-dashed",
       )}
-      aria-label={`Match ${match.matchNo}: ${match.homeTeamName} vs ${match.awayTeamName}`}
+      aria-label={`Match ${match.matchNo}: ${homeTeamName ?? "TBD"} vs ${awayTeamName ?? "TBD"}`}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
           <span>
             {dateLabel} · #{match.matchNo}
+            {isKnockout && (
+              <span className="ml-1 rounded-sm bg-muted px-1 py-0.5 text-[10px] uppercase tracking-wide">
+                {match.round}
+              </span>
+            )}
           </span>
           {predictionsLocked && (
             <span className="inline-flex items-center gap-1 rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
@@ -145,24 +185,61 @@ export function MatchResultRow({ match, dateLabel }: Props) {
         />
       </div>
 
+      {isKnockout && teamOptions && (
+        <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+          <TeamPicker
+            label="Home team"
+            value={homeTeamId}
+            options={teamOptions}
+            excludeId={awayTeamId}
+            disabled={teamPending}
+            onChange={setHomeTeamId}
+          />
+          <span className="hidden text-center text-xs font-medium uppercase tracking-wider text-muted-foreground sm:block">
+            vs
+          </span>
+          <TeamPicker
+            label="Away team"
+            value={awayTeamId}
+            options={teamOptions}
+            excludeId={homeTeamId}
+            disabled={teamPending}
+            onChange={setAwayTeamId}
+          />
+          {teamsDirty && (
+            <div className="sm:col-span-3 flex justify-end">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={teamPending}
+                onClick={handleSaveTeams}
+              >
+                {teamPending ? "Saving…" : "Save matchup"}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
-        <TeamCell name={match.homeTeamName} side="home" />
+        <TeamCell name={homeTeamName ?? "TBD"} side="home" />
         <div className="flex items-center gap-1.5 sm:gap-2">
           <GoalInput
-            label={`${match.homeTeamName} goals`}
+            label={`${homeTeamName ?? "Home"} goals`}
             value={home}
             onChange={setHome}
-            disabled={pending}
+            disabled={pending || (isKnockout && !teamsAssigned)}
           />
           <span className="text-base font-medium text-muted-foreground">:</span>
           <GoalInput
-            label={`${match.awayTeamName} goals`}
+            label={`${awayTeamName ?? "Away"} goals`}
             value={away}
             onChange={setAway}
-            disabled={pending}
+            disabled={pending || (isKnockout && !teamsAssigned)}
           />
         </div>
-        <TeamCell name={match.awayTeamName} side="away" />
+        <TeamCell name={awayTeamName ?? "TBD"} side="away" />
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
@@ -200,7 +277,12 @@ export function MatchResultRow({ match, dateLabel }: Props) {
         <Button
           type="button"
           size="sm"
-          disabled={!valid || pending || !dirty}
+          disabled={
+            !valid ||
+            pending ||
+            !dirty ||
+            (isKnockout && !teamsAssigned)
+          }
           onClick={handleSave}
         >
           {pending && status === "saving"
@@ -211,6 +293,51 @@ export function MatchResultRow({ match, dateLabel }: Props) {
         </Button>
       </div>
     </article>
+  );
+}
+
+function TeamPicker({
+  label,
+  value,
+  options,
+  excludeId,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: number | null;
+  options: TeamOption[];
+  excludeId: number | null;
+  disabled?: boolean;
+  onChange: (id: number | null) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2">
+      <span className="sr-only">{label}</span>
+      <select
+        aria-label={label}
+        value={value ?? ""}
+        disabled={disabled}
+        onChange={(e) => {
+          const v = e.target.value;
+          onChange(v === "" ? null : Number(v));
+        }}
+        className={cn(
+          "h-9 w-full rounded-md border bg-background px-2 text-sm",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "disabled:cursor-not-allowed disabled:opacity-60",
+        )}
+      >
+        <option value="">— TBD —</option>
+        {options
+          .filter((t) => t.id !== excludeId)
+          .map((t) => (
+            <option key={t.id} value={t.id}>
+              {flagFor(t.name)} {t.name} ({t.groupCode})
+            </option>
+          ))}
+      </select>
+    </label>
   );
 }
 

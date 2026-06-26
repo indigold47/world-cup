@@ -8,25 +8,37 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { GROUP_CODES, type GroupCode } from "@/data/tournament";
+import {
+  GROUP_CODES,
+  KNOCKOUT_ROUNDS,
+  ROUND_SHORT,
+  type GroupCode,
+  type KnockoutRound,
+} from "@/data/tournament";
 import { MatchResultRow } from "./match-result-row";
+
+export type TeamOption = {
+  id: number;
+  name: string;
+  groupCode: string;
+};
 
 export type AdminMatchData = {
   id: number;
   matchNo: number;
-  groupCode: string;
-  date: string;
-  homeTeamName: string;
-  awayTeamName: string;
+  round: string;
+  groupCode: string | null;
+  date: string | null;
+  homeTeamId: number | null;
+  awayTeamId: number | null;
+  homeTeamName: string | null;
+  awayTeamName: string | null;
   homeGoals: number | null;
   awayGoals: number | null;
   status: "scheduled" | "finished";
   predictionsLocked: boolean;
 };
 
-// match_date is a Postgres `date` (no time), arriving as "YYYY-MM-DD".
-// new Date() treats that as midnight UTC, so renders ticked back a day in
-// negative-UTC zones. Pin to UTC to keep the displayed day truthful.
 const DATE_FMT = new Intl.DateTimeFormat(undefined, {
   weekday: "short",
   month: "short",
@@ -34,19 +46,26 @@ const DATE_FMT = new Intl.DateTimeFormat(undefined, {
   timeZone: "UTC",
 });
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | null): string {
+  if (!iso) return "Date TBD";
   return DATE_FMT.format(new Date(iso));
 }
 
-export function MatchResultsEditor({ matches }: { matches: AdminMatchData[] }) {
-  const matchesByGroup = useMemo(() => {
-    const map = new Map<GroupCode, AdminMatchData[]>();
-    for (const code of GROUP_CODES) map.set(code, []);
-    for (const m of matches) {
-      map.get(m.groupCode as GroupCode)?.push(m);
-    }
-    return map;
-  }, [matches]);
+export function MatchResultsEditor({
+  matches,
+  teamOptions,
+}: {
+  matches: AdminMatchData[];
+  teamOptions: TeamOption[];
+}) {
+  const groupMatches = useMemo(
+    () => matches.filter((m) => m.round === "GROUP"),
+    [matches],
+  );
+  const knockoutMatches = useMemo(
+    () => matches.filter((m) => m.round !== "GROUP"),
+    [matches],
+  );
 
   const total = matches.length;
   const finished = matches.filter((m) => m.status === "finished").length;
@@ -75,46 +94,159 @@ export function MatchResultsEditor({ matches }: { matches: AdminMatchData[] }) {
         />
       </div>
 
-      <Tabs defaultValue="A" className="gap-3">
-        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-          <TabsList className="inline-flex w-auto">
-            {GROUP_CODES.map((code) => {
-              const groupMatches = matchesByGroup.get(code) ?? [];
-              const groupDone = groupMatches.filter(
-                (m) => m.status === "finished",
-              ).length;
-              const complete = groupDone === groupMatches.length;
-              return (
-                <TabsTrigger key={code} value={code} className="gap-1.5">
-                  <span className="font-semibold">{code}</span>
+      <Tabs defaultValue="group" className="gap-3">
+        <TabsList className="w-full">
+          <TabsTrigger value="group" className="flex-1">
+            Group stage
+          </TabsTrigger>
+          <TabsTrigger value="knockout" className="flex-1">
+            Knockout
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="group" className="space-y-3">
+          <GroupStageEditor matches={groupMatches} />
+        </TabsContent>
+
+        <TabsContent value="knockout" className="space-y-3">
+          <KnockoutEditor matches={knockoutMatches} teamOptions={teamOptions} />
+        </TabsContent>
+      </Tabs>
+    </section>
+  );
+}
+
+function GroupStageEditor({ matches }: { matches: AdminMatchData[] }) {
+  const matchesByGroup = useMemo(() => {
+    const map = new Map<GroupCode, AdminMatchData[]>();
+    for (const code of GROUP_CODES) map.set(code, []);
+    for (const m of matches) {
+      map.get(m.groupCode as GroupCode)?.push(m);
+    }
+    return map;
+  }, [matches]);
+
+  return (
+    <Tabs defaultValue="A" className="gap-3">
+      <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        <TabsList className="inline-flex w-auto">
+          {GROUP_CODES.map((code) => {
+            const groupMatches = matchesByGroup.get(code) ?? [];
+            const groupDone = groupMatches.filter(
+              (m) => m.status === "finished",
+            ).length;
+            const complete = groupDone === groupMatches.length;
+            return (
+              <TabsTrigger key={code} value={code} className="gap-1.5">
+                <span className="font-semibold">{code}</span>
+                <span
+                  className={`text-[10px] tabular-nums ${
+                    complete ? "text-success" : "text-muted-foreground"
+                  }`}
+                >
+                  {groupDone}/{groupMatches.length}
+                </span>
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+      </div>
+
+      {GROUP_CODES.map((code) => {
+        const groupMatches = matchesByGroup.get(code) ?? [];
+        return (
+          <TabsContent key={code} value={code} className="space-y-3">
+            {groupMatches.map((m) => (
+              <MatchResultRow
+                key={m.id}
+                match={m}
+                dateLabel={formatDate(m.date)}
+              />
+            ))}
+          </TabsContent>
+        );
+      })}
+    </Tabs>
+  );
+}
+
+function KnockoutEditor({
+  matches,
+  teamOptions,
+}: {
+  matches: AdminMatchData[];
+  teamOptions: TeamOption[];
+}) {
+  const matchesByRound = useMemo(() => {
+    const map = new Map<KnockoutRound, AdminMatchData[]>();
+    for (const r of KNOCKOUT_ROUNDS) map.set(r, []);
+    for (const m of matches) {
+      map.get(m.round as KnockoutRound)?.push(m);
+    }
+    return map;
+  }, [matches]);
+
+  const firstWithMatches =
+    KNOCKOUT_ROUNDS.find((r) => (matchesByRound.get(r) ?? []).length > 0) ?? "R32";
+
+  if (matches.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">
+        No knockout fixtures seeded yet.
+      </div>
+    );
+  }
+
+  return (
+    <Tabs defaultValue={firstWithMatches} className="gap-3">
+      <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        <TabsList className="inline-flex w-auto">
+          {KNOCKOUT_ROUNDS.map((r) => {
+            const rounds = matchesByRound.get(r) ?? [];
+            const doneHere = rounds.filter(
+              (m) => m.status === "finished",
+            ).length;
+            const complete =
+              rounds.length > 0 && doneHere === rounds.length;
+            return (
+              <TabsTrigger key={r} value={r} className="gap-1.5" disabled={rounds.length === 0}>
+                <span className="font-semibold">{ROUND_SHORT[r]}</span>
+                {rounds.length > 0 && (
                   <span
                     className={`text-[10px] tabular-nums ${
                       complete ? "text-success" : "text-muted-foreground"
                     }`}
                   >
-                    {groupDone}/{groupMatches.length}
+                    {doneHere}/{rounds.length}
                   </span>
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-        </div>
+                )}
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+      </div>
 
-        {GROUP_CODES.map((code) => {
-          const groupMatches = matchesByGroup.get(code) ?? [];
-          return (
-            <TabsContent key={code} value={code} className="space-y-3">
-              {groupMatches.map((m) => (
+      {KNOCKOUT_ROUNDS.map((r) => {
+        const rounds = matchesByRound.get(r) ?? [];
+        return (
+          <TabsContent key={r} value={r} className="space-y-3">
+            {rounds.length === 0 ? (
+              <div className="rounded-lg border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">
+                No fixtures yet for this round.
+              </div>
+            ) : (
+              rounds.map((m) => (
                 <MatchResultRow
                   key={m.id}
                   match={m}
                   dateLabel={formatDate(m.date)}
+                  teamOptions={teamOptions}
                 />
-              ))}
-            </TabsContent>
-          );
-        })}
-      </Tabs>
-    </section>
+              ))
+            )}
+          </TabsContent>
+        );
+      })}
+    </Tabs>
   );
 }

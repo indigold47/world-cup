@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
+import { roundFromMatchNo } from "@/data/tournament";
 import { LockEditor } from "./lock-editor";
 import {
   MatchResultsEditor,
   type AdminMatchData,
+  type TeamOption,
 } from "./match-results-editor";
 
 export const metadata = { title: "Results · Voice123 World Cup Pool" };
@@ -26,13 +28,13 @@ export default async function ResultsPage() {
 
   const [settingsRes, teamsRes, matchesRes] = await Promise.all([
     supabase.from("settings").select("lock_at").eq("id", 1).single(),
-    supabase.from("teams").select("id, name, group_code"),
+    supabase.from("teams").select("id, name, group_code").order("name"),
+    // Round derived from match_no — no schema column required.
     supabase
       .from("matches")
       .select(
         "id, match_no, group_code, match_date, home_team_id, away_team_id, home_goals, away_goals, status, predictions_locked",
       )
-      .order("match_date")
       .order("match_no"),
   ]);
 
@@ -40,13 +42,24 @@ export default async function ResultsPage() {
     (teamsRes.data ?? []).map((t) => [t.id, t.name]),
   );
 
+  const teamOptions: TeamOption[] = (teamsRes.data ?? []).map((t) => ({
+    id: t.id,
+    name: t.name,
+    groupCode: t.group_code,
+  }));
+
   const matches: AdminMatchData[] = (matchesRes.data ?? []).map((m) => ({
     id: m.id,
     matchNo: m.match_no,
+    round: roundFromMatchNo(m.match_no),
     groupCode: m.group_code,
     date: m.match_date,
-    homeTeamName: teamsById.get(m.home_team_id) ?? "—",
-    awayTeamName: teamsById.get(m.away_team_id) ?? "—",
+    homeTeamId: m.home_team_id,
+    awayTeamId: m.away_team_id,
+    homeTeamName:
+      m.home_team_id != null ? teamsById.get(m.home_team_id) ?? null : null,
+    awayTeamName:
+      m.away_team_id != null ? teamsById.get(m.away_team_id) ?? null : null,
     homeGoals: m.home_goals,
     awayGoals: m.away_goals,
     status: m.status === "finished" ? "finished" : "scheduled",
@@ -58,12 +71,12 @@ export default async function ResultsPage() {
       <PageHeader
         eyebrow="Admin"
         title="Admin controls"
-        subtitle="Set the prediction deadline and enter the actual scores as matches finish."
+        subtitle="Set the deadline, fill knockout matchups, and enter actual scores as matches finish."
       />
 
       <LockEditor currentLockAt={settingsRes.data?.lock_at ?? null} />
 
-      <MatchResultsEditor matches={matches} />
+      <MatchResultsEditor matches={matches} teamOptions={teamOptions} />
     </main>
   );
 }

@@ -155,36 +155,36 @@ export type Database = {
       matches: {
         Row: {
           away_goals: number | null
-          away_team_id: number
-          group_code: string
+          away_team_id: number | null
+          group_code: string | null
           home_goals: number | null
-          home_team_id: number
+          home_team_id: number | null
           id: number
-          match_date: string
+          match_date: string | null
           match_no: number
           predictions_locked: boolean
           status: string
         }
         Insert: {
           away_goals?: number | null
-          away_team_id: number
-          group_code: string
+          away_team_id?: number | null
+          group_code?: string | null
           home_goals?: number | null
-          home_team_id: number
+          home_team_id?: number | null
           id?: number
-          match_date: string
+          match_date?: string | null
           match_no: number
           predictions_locked?: boolean
           status?: string
         }
         Update: {
           away_goals?: number | null
-          away_team_id?: number
-          group_code?: string
+          away_team_id?: number | null
+          group_code?: string | null
           home_goals?: number | null
-          home_team_id?: number
+          home_team_id?: number | null
           id?: number
-          match_date?: string
+          match_date?: string | null
           match_no?: number
           predictions_locked?: boolean
           status?: string
