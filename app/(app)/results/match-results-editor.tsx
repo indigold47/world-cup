@@ -67,33 +67,15 @@ export function MatchResultsEditor({
     [matches],
   );
 
-  const total = matches.length;
-  const finished = matches.filter((m) => m.status === "finished").length;
+  const groupFinished = groupMatches.filter(
+    (m) => m.status === "finished",
+  ).length;
+  const knockoutFinished = knockoutMatches.filter(
+    (m) => m.status === "finished",
+  ).length;
 
   return (
     <section className="space-y-4">
-      <div className="rounded-lg border bg-card p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              Results entered
-            </p>
-            <p className="text-2xl font-semibold tabular-nums">
-              {finished} <span className="text-muted-foreground">/ {total}</span>
-            </p>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {finished === total
-              ? "All matches finished."
-              : `${total - finished} still scheduled`}
-          </p>
-        </div>
-        <Progress
-          value={total === 0 ? 0 : (finished / total) * 100}
-          className="mt-3 h-2"
-        />
-      </div>
-
       <Tabs defaultValue="group" className="gap-3">
         <TabsList className="w-full">
           <TabsTrigger value="group" className="flex-1">
@@ -104,15 +86,57 @@ export function MatchResultsEditor({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="group" className="space-y-3">
+        <TabsContent value="group" className="space-y-4">
+          <StageProgress
+            finished={groupFinished}
+            total={groupMatches.length}
+          />
           <GroupStageEditor matches={groupMatches} />
         </TabsContent>
 
-        <TabsContent value="knockout" className="space-y-3">
+        <TabsContent value="knockout" className="space-y-4">
+          <StageProgress
+            finished={knockoutFinished}
+            total={knockoutMatches.length}
+          />
           <KnockoutEditor matches={knockoutMatches} teamOptions={teamOptions} />
         </TabsContent>
       </Tabs>
     </section>
+  );
+}
+
+function StageProgress({
+  finished,
+  total,
+}: {
+  finished: number;
+  total: number;
+}) {
+  return (
+    <div className="rounded-lg border bg-card p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Results entered
+          </p>
+          <p className="text-2xl font-semibold tabular-nums">
+            {finished} <span className="text-muted-foreground">/ {total}</span>
+          </p>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {total === 0
+            ? "No matches yet."
+            : finished === total
+              ? "All matches finished."
+              : `${total - finished} still scheduled`}
+        </p>
+      </div>
+      <Progress
+        value={total === 0 ? 0 : (finished / total) * 100}
+        className="mt-3 h-2"
+      />
+    </div>
   );
 }
 
