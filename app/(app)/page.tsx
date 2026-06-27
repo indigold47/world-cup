@@ -56,7 +56,11 @@ export default async function Home() {
       />
 
       {isLocked && lockAt ? (
-        <LockedBanner lockedAt={lockAt} />
+        <LockedBanner
+          lockedAt={lockAt}
+          title="Group stage is locked"
+          message="Group-stage and group-table predictions are frozen. Knockout matches are still open — predict each one before kickoff on the Matches page."
+        />
       ) : (
         <SectionCard
           title="Time to lock"

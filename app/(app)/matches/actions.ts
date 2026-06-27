@@ -46,15 +46,19 @@ export async function saveMatchPrediction(
 
   // Defensive lock check — the DB trigger also enforces it, but we want
   // a friendly message instead of a Postgres error string.
+  // Global lock_at is the GROUP-stage deadline only (match_no <= 72).
+  // Knockout matches (match_no > 72) are gated only by their per-match flag.
   const [{ data: settings }, { data: match }] = await Promise.all([
     supabase.from("settings").select("lock_at").eq("id", 1).single(),
     supabase
       .from("matches")
-      .select("predictions_locked")
+      .select("match_no, predictions_locked")
       .eq("id", matchId)
       .single(),
   ]);
+  const isGroupStage = (match?.match_no ?? 0) <= 72;
   if (
+    isGroupStage &&
     settings?.lock_at &&
     Date.now() >= new Date(settings.lock_at).getTime()
   ) {
