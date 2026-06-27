@@ -40,6 +40,12 @@ export function MatchResultRow({ match, dateLabel, teamOptions }: Props) {
   const [away, setAway] = useState<string>(
     match.awayGoals == null ? "" : String(match.awayGoals),
   );
+  const [homePens, setHomePens] = useState<string>(
+    match.homePens == null ? "" : String(match.homePens),
+  );
+  const [awayPens, setAwayPens] = useState<string>(
+    match.awayPens == null ? "" : String(match.awayPens),
+  );
   const [status, setStatus] = useState<Status>("idle");
   const [pending, startTransition] = useTransition();
   const [confirmingClear, setConfirmingClear] = useState(false);
@@ -75,22 +81,37 @@ export function MatchResultRow({ match, dateLabel, teamOptions }: Props) {
   }, [status]);
 
   const isFinished = match.status === "finished";
+  const baselinePens =
+    match.homePens != null && match.awayPens != null
+      ? `${match.homePens}:${match.awayPens}`
+      : "";
   const baseline =
     match.homeGoals != null && match.awayGoals != null
-      ? `${match.homeGoals}:${match.awayGoals}`
+      ? `${match.homeGoals}:${match.awayGoals}/${baselinePens}`
       : "";
-  const currentKey = `${home}:${away}`;
+  const currentKey = `${home}:${away}/${homePens}:${awayPens}`;
   const dirty = currentKey !== baseline;
 
   const h = parseGoal(home);
   const a = parseGoal(away);
-  const valid = h !== null && a !== null;
+  const isDraw = h !== null && a !== null && h === a;
+  const pensRequired = isKnockout && isDraw;
+  const hp = parseGoal(homePens);
+  const ap = parseGoal(awayPens);
+  const pensValid = !pensRequired || (hp !== null && ap !== null && hp !== ap);
+  const valid = h !== null && a !== null && pensValid;
 
   function handleSave() {
     if (!valid) return;
     startTransition(async () => {
       setStatus("saving");
-      const result = await saveMatchResult(match.id, h as number, a as number);
+      const result = await saveMatchResult(
+        match.id,
+        h as number,
+        a as number,
+        pensRequired ? hp : null,
+        pensRequired ? ap : null,
+      );
       if (result.ok) {
         setStatus("saved");
       } else {
@@ -167,6 +188,8 @@ export function MatchResultRow({ match, dateLabel, teamOptions }: Props) {
       if (result.ok) {
         setHome("");
         setAway("");
+        setHomePens("");
+        setAwayPens("");
         setStatus("saved");
       } else {
         setStatus("error");
@@ -292,6 +315,34 @@ export function MatchResultRow({ match, dateLabel, teamOptions }: Props) {
         </div>
         <TeamCell name={awayTeamName ?? "TBD"} side="away" />
       </div>
+
+      {pensRequired && (
+        <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4 border-t pt-3">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Penalty shootout
+          </p>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <GoalInput
+              label={`${homeTeamName ?? "Home"} penalty score`}
+              value={homePens}
+              onChange={setHomePens}
+              disabled={pending}
+            />
+            <span className="text-base font-medium text-muted-foreground">
+              :
+            </span>
+            <GoalInput
+              label={`${awayTeamName ?? "Away"} penalty score`}
+              value={awayPens}
+              onChange={setAwayPens}
+              disabled={pending}
+            />
+          </div>
+          <p className="text-right text-[11px] text-muted-foreground">
+            Required for a knockout draw
+          </p>
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
         <Button

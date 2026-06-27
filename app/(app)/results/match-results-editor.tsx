@@ -35,6 +35,8 @@ export type AdminMatchData = {
   awayTeamName: string | null;
   homeGoals: number | null;
   awayGoals: number | null;
+  homePens: number | null;
+  awayPens: number | null;
   status: "scheduled" | "finished";
   predictionsLocked: boolean;
 };

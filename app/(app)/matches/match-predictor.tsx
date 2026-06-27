@@ -37,6 +37,8 @@ export type MatchData = {
 export type MatchPrediction = {
   home: number;
   away: number;
+  homePens?: number | null;
+  awayPens?: number | null;
 };
 
 type Props = {

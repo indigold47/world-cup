@@ -7,7 +7,7 @@
  * Scoring rules live in ./score.ts and ./standings.ts.
  */
 
-import { scoreMatch } from "./score";
+import { scoreMatch, scoreKnockoutBonus } from "./score";
 import { computeGroupStandings, type FinishedMatch } from "./standings";
 
 export type ScoringMatch = {
@@ -20,6 +20,12 @@ export type ScoringMatch = {
   away_team_id: number | null;
   home_goals: number | null;
   away_goals: number | null;
+  // Shootout result. Only meaningful on knockout rows where 90-min drew.
+  home_pens: number | null;
+  away_pens: number | null;
+  // Drives the knockout bonus path. match_no <= 72 → group stage, scoring
+  // ignores pens.
+  match_no: number;
   status: "scheduled" | "finished";
 };
 
@@ -219,10 +225,24 @@ export function deriveActualStandings(
 /**
  * Points a match prediction is worth right now. Returns null if the match
  * isn't finished — the caller (recompute) should fall back to 0 in that case.
+ *
+ * For knockout matches (match_no > 72) we add scoreKnockoutBonus on top, so
+ * a correct shootout-winner pick is worth +2 above the base 90-min score.
  */
 export function scoreOneMatchPrediction(
-  prediction: { home_goals: number; away_goals: number } | null | undefined,
-  match: Pick<ScoringMatch, "status" | "home_goals" | "away_goals">,
+  prediction:
+    | {
+        home_goals: number;
+        away_goals: number;
+        home_pens?: number | null;
+        away_pens?: number | null;
+      }
+    | null
+    | undefined,
+  match: Pick<
+    ScoringMatch,
+    "status" | "home_goals" | "away_goals" | "home_pens" | "away_pens" | "match_no"
+  >,
 ): number | null {
   if (!prediction) return null;
   if (
@@ -232,8 +252,24 @@ export function scoreOneMatchPrediction(
   ) {
     return null;
   }
-  return scoreMatch(
+  const base = scoreMatch(
     { home: prediction.home_goals, away: prediction.away_goals },
     { home: match.home_goals, away: match.away_goals },
   );
+  if (match.match_no <= 72) return base;
+  const bonus = scoreKnockoutBonus(
+    {
+      home: prediction.home_goals,
+      away: prediction.away_goals,
+      homePens: prediction.home_pens ?? null,
+      awayPens: prediction.away_pens ?? null,
+    },
+    {
+      home: match.home_goals,
+      away: match.away_goals,
+      homePens: match.home_pens,
+      awayPens: match.away_pens,
+    },
+  );
+  return base + bonus;
 }

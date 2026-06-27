@@ -44,26 +44,44 @@ export function MatchRow({
 }: Props) {
   const homeName = match.homeTeamName ?? "TBD";
   const awayName = match.awayTeamName ?? "TBD";
+  const isKnockout = match.matchNo > 72;
   const [home, setHome] = useState<string>(
     initial ? String(initial.home) : "",
   );
   const [away, setAway] = useState<string>(
     initial ? String(initial.away) : "",
   );
+  const [homePens, setHomePens] = useState<string>(
+    initial?.homePens != null ? String(initial.homePens) : "",
+  );
+  const [awayPens, setAwayPens] = useState<string>(
+    initial?.awayPens != null ? String(initial.awayPens) : "",
+  );
   const [status, setStatus] = useState<SaveStatus>("idle");
   const timerRef = useRef<number | null>(null);
   const lastSavedRef = useRef<string>(
-    initial ? `${initial.home}:${initial.away}` : "",
+    initial
+      ? `${initial.home}:${initial.away}/${initial.homePens ?? ""}:${initial.awayPens ?? ""}`
+      : "",
   );
 
-  // Schedule a debounced save whenever both values are valid and changed.
+  const h = parseGoal(home);
+  const a = parseGoal(away);
+  const isDraw = h !== null && a !== null && h === a;
+  const pensRequired = isKnockout && isDraw;
+  const hp = parseGoal(homePens);
+  const ap = parseGoal(awayPens);
+  const pensValid =
+    !pensRequired || (hp !== null && ap !== null && hp !== ap);
+
+  // Schedule a debounced save whenever the full prediction (goals + pens
+  // if required) is valid and has changed since the last save.
   useEffect(() => {
     if (locked) return;
-    const h = parseGoal(home);
-    const a = parseGoal(away);
 
+    const goalsComplete = h !== null && a !== null;
+    const isComplete = goalsComplete && pensValid;
     // Report completion state to the parent immediately (local UI feels live).
-    const isComplete = h !== null && a !== null;
     onPredictionStateChange(match.id, isComplete);
 
     if (!isComplete) {
@@ -71,13 +89,19 @@ export function MatchRow({
       return;
     }
 
-    const key = `${h}:${a}`;
+    const key = `${h}:${a}/${hp ?? ""}:${ap ?? ""}`;
     if (key === lastSavedRef.current) return;
 
     if (timerRef.current) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(async () => {
       setStatus("saving");
-      const result = await saveMatchPrediction(match.id, h, a);
+      const result = await saveMatchPrediction(
+        match.id,
+        h,
+        a,
+        pensRequired ? hp : null,
+        pensRequired ? ap : null,
+      );
       if (result.ok) {
         lastSavedRef.current = key;
         setStatus("saved");
@@ -94,14 +118,12 @@ export function MatchRow({
     return () => {
       if (timerRef.current) window.clearTimeout(timerRef.current);
     };
-    // We intentionally exclude onPredictionStateChange from deps — its identity
-    // is stable enough from the parent's perspective, but adding it would cause
-    // double-scheduling on render churn. The match.id, home, away, locked are
-    // the real triggers.
+    // onPredictionStateChange is intentionally excluded — see note in the
+    // original implementation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [match.id, home, away, locked]);
+  }, [match.id, h, a, hp, ap, pensRequired, pensValid, locked]);
 
-  const isComplete = parseGoal(home) !== null && parseGoal(away) !== null;
+  const isComplete = h !== null && a !== null && pensValid;
 
   return (
     <article
@@ -145,6 +167,34 @@ export function MatchRow({
         </div>
         <TeamCell name={awayName} side="away" />
       </div>
+
+      {pensRequired && (
+        <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4 border-t pt-3">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Penalty shootout
+          </p>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <GoalInput
+              label={`${homeName} penalty score`}
+              value={homePens}
+              onChange={setHomePens}
+              disabled={locked}
+            />
+            <span className="text-base font-medium text-muted-foreground">
+              :
+            </span>
+            <GoalInput
+              label={`${awayName} penalty score`}
+              value={awayPens}
+              onChange={setAwayPens}
+              disabled={locked}
+            />
+          </div>
+          <p className="text-right text-[11px] text-muted-foreground">
+            +2 if you pick the winner
+          </p>
+        </div>
+      )}
 
       {locked && !tbd && (
         <div className="mt-3 flex justify-end border-t pt-2">

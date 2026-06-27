@@ -47,6 +47,35 @@ export function scoreMatch(
   return 0;
 }
 
+/**
+ * Knockout-only bonus on top of scoreMatch: +2 if the user predicted a draw,
+ * the match actually drew at 90 min and went to pens, AND the user picked the
+ * correct shootout winner. Pens *exact* score is intentionally not rewarded —
+ * shootouts are coin-flippy, so a 6-5 vs 5-4 distinction is mostly luck.
+ *
+ * Returns the bonus to ADD to scoreMatch — never the total. 0 when any
+ * precondition fails (so callers can blindly add).
+ */
+export function scoreKnockoutBonus(
+  predicted: (Score & { homePens?: number | null; awayPens?: number | null }) | null | undefined,
+  actual: (Score & { homePens?: number | null; awayPens?: number | null }) | null | undefined,
+): number {
+  if (!predicted || !actual) return 0;
+  if (predicted.home !== predicted.away) return 0;
+  if (actual.home !== actual.away) return 0;
+  if (
+    predicted.homePens == null ||
+    predicted.awayPens == null ||
+    actual.homePens == null ||
+    actual.awayPens == null
+  ) {
+    return 0;
+  }
+  const predWinner = predicted.homePens > predicted.awayPens ? "H" : "A";
+  const actWinner = actual.homePens > actual.awayPens ? "H" : "A";
+  return predWinner === actWinner ? 2 : 0;
+}
+
 export type RankedTeam = { teamId: number; rank: number };
 
 export function scoreGroupTable(

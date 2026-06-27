@@ -7,6 +7,7 @@ import { recomputeScores } from "@/lib/scoring/recompute";
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 const MAX_GOALS = 30;
+const MAX_PENS = 30;
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -56,6 +57,8 @@ export async function saveMatchResult(
   matchId: number,
   homeGoals: number,
   awayGoals: number,
+  homePens?: number | null,
+  awayPens?: number | null,
 ): Promise<ActionResult> {
   if (!Number.isInteger(matchId)) {
     return { ok: false, error: "Invalid match id" };
@@ -63,15 +66,45 @@ export async function saveMatchResult(
   if (!isValidGoal(homeGoals) || !isValidGoal(awayGoals)) {
     return { ok: false, error: `Goals must be 0–${MAX_GOALS}` };
   }
+  const homePensClean = homePens == null ? null : homePens;
+  const awayPensClean = awayPens == null ? null : awayPens;
+  if ((homePensClean == null) !== (awayPensClean == null)) {
+    return { ok: false, error: "Both penalty scores are required" };
+  }
+  for (const v of [homePensClean, awayPensClean]) {
+    if (
+      v != null &&
+      (!Number.isInteger(v) || v < 0 || v > MAX_PENS)
+    ) {
+      return { ok: false, error: `Penalty score must be 0–${MAX_PENS}` };
+    }
+  }
+  if (homePensClean != null && homePensClean === awayPensClean) {
+    return { ok: false, error: "Penalty shootouts can't tie" };
+  }
 
   const { supabase, error: adminError } = await requireAdmin();
   if (adminError) return { ok: false, error: adminError };
+
+  // Pens only make sense on knockout draws — silently drop otherwise.
+  const { data: existing, error: readErr } = await supabase
+    .from("matches")
+    .select("match_no")
+    .eq("id", matchId)
+    .single();
+  if (readErr) return { ok: false, error: readErr.message };
+  const isKnockout = (existing?.match_no ?? 0) > 72;
+  const isDraw = homeGoals === awayGoals;
+  const persistedHomePens = isKnockout && isDraw ? homePensClean : null;
+  const persistedAwayPens = isKnockout && isDraw ? awayPensClean : null;
 
   const { error } = await supabase
     .from("matches")
     .update({
       home_goals: homeGoals,
       away_goals: awayGoals,
+      home_pens: persistedHomePens,
+      away_pens: persistedAwayPens,
       status: "finished",
     })
     .eq("id", matchId);
@@ -209,6 +242,8 @@ export async function clearMatchResult(matchId: number): Promise<ActionResult> {
     .update({
       home_goals: null,
       away_goals: null,
+      home_pens: null,
+      away_pens: null,
       status: "scheduled",
     })
     .eq("id", matchId);

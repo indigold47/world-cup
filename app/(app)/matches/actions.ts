@@ -30,12 +30,29 @@ export async function saveMatchPrediction(
   matchId: number,
   homeGoals: number,
   awayGoals: number,
+  homePens?: number | null,
+  awayPens?: number | null,
 ): Promise<SavePredictionResult> {
   if (!Number.isInteger(matchId)) {
     return { ok: false, error: "Invalid match id" };
   }
   if (!isValidGoal(homeGoals) || !isValidGoal(awayGoals)) {
     return { ok: false, error: `Goals must be 0–${MAX_GOALS}` };
+  }
+  // Normalize pens: treat undefined as null. Both-or-neither, no tie.
+  const homePensClean = homePens == null ? null : homePens;
+  const awayPensClean = awayPens == null ? null : awayPens;
+  if ((homePensClean == null) !== (awayPensClean == null)) {
+    return { ok: false, error: "Both penalty scores are required" };
+  }
+  if (homePensClean != null && !isValidGoal(homePensClean)) {
+    return { ok: false, error: `Penalty score must be 0–${MAX_GOALS}` };
+  }
+  if (awayPensClean != null && !isValidGoal(awayPensClean)) {
+    return { ok: false, error: `Penalty score must be 0–${MAX_GOALS}` };
+  }
+  if (homePensClean != null && homePensClean === awayPensClean) {
+    return { ok: false, error: "Penalty shootouts can't tie" };
   }
 
   const supabase = await createClient();
@@ -68,12 +85,26 @@ export async function saveMatchPrediction(
     return { ok: false, error: "Predictions for this match are locked" };
   }
 
+  // Pens are knockout-only AND draw-only. Silently strip when invalid context
+  // so the client can over-send safely; the DB CHECKs are the backstop.
+  const isDraw = homeGoals === awayGoals;
+  const persistedHomePens =
+    !isGroupStage && isDraw ? homePensClean : null;
+  const persistedAwayPens =
+    !isGroupStage && isDraw ? awayPensClean : null;
+  // For knockout draws, the prediction is incomplete without a shootout call.
+  if (!isGroupStage && isDraw && persistedHomePens == null) {
+    return { ok: false, error: "Pick the shootout winner too" };
+  }
+
   const { error: upsertError } = await supabase.from("match_predictions").upsert(
     {
       user_id: user.id,
       match_id: matchId,
       home_goals: homeGoals,
       away_goals: awayGoals,
+      home_pens: persistedHomePens,
+      away_pens: persistedAwayPens,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id,match_id" },

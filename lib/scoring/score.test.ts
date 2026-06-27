@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { outcome, scoreMatch, scoreGroupTable } from "./score";
+import { outcome, scoreMatch, scoreGroupTable, scoreKnockoutBonus } from "./score";
 
 describe("outcome", () => {
   it("H when home wins", () => expect(outcome(2, 1)).toBe("H"));
@@ -133,5 +133,63 @@ describe("scoreGroupTable", () => {
 
   it("0 when prediction is empty", () => {
     expect(scoreGroupTable([], actual)).toBe(0);
+  });
+});
+
+describe("scoreKnockoutBonus", () => {
+  it("+2 when both sides drew and the predicted shootout winner is right", () => {
+    expect(
+      scoreKnockoutBonus(
+        { home: 1, away: 1, homePens: 4, awayPens: 3 },
+        { home: 2, away: 2, homePens: 5, awayPens: 4 },
+      ),
+    ).toBe(2);
+  });
+
+  it("0 when the predicted shootout winner is wrong", () => {
+    expect(
+      scoreKnockoutBonus(
+        { home: 1, away: 1, homePens: 4, awayPens: 3 },
+        { home: 1, away: 1, homePens: 4, awayPens: 5 },
+      ),
+    ).toBe(0);
+  });
+
+  it("0 when predicted score wasn't a draw", () => {
+    expect(
+      scoreKnockoutBonus(
+        { home: 2, away: 1 },
+        { home: 1, away: 1, homePens: 5, awayPens: 4 },
+      ),
+    ).toBe(0);
+  });
+
+  it("0 when actual score wasn't a draw", () => {
+    expect(
+      scoreKnockoutBonus(
+        { home: 1, away: 1, homePens: 5, awayPens: 4 },
+        { home: 2, away: 1 },
+      ),
+    ).toBe(0);
+  });
+
+  it("0 when pens missing on either side", () => {
+    expect(
+      scoreKnockoutBonus(
+        { home: 1, away: 1 },
+        { home: 1, away: 1, homePens: 5, awayPens: 4 },
+      ),
+    ).toBe(0);
+    expect(
+      scoreKnockoutBonus(
+        { home: 1, away: 1, homePens: 5, awayPens: 4 },
+        { home: 1, away: 1 },
+      ),
+    ).toBe(0);
+  });
+
+  it("0 when either argument missing", () => {
+    expect(scoreKnockoutBonus(null, { home: 1, away: 1, homePens: 5, awayPens: 4 })).toBe(0);
+    expect(scoreKnockoutBonus({ home: 1, away: 1, homePens: 5, awayPens: 4 }, null)).toBe(0);
   });
 });

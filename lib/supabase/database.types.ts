@@ -110,7 +110,9 @@ export type Database = {
       match_predictions: {
         Row: {
           away_goals: number
+          away_pens: number | null
           home_goals: number
+          home_pens: number | null
           id: number
           match_id: number
           points: number
@@ -119,7 +121,9 @@ export type Database = {
         }
         Insert: {
           away_goals: number
+          away_pens?: number | null
           home_goals: number
+          home_pens?: number | null
           id?: number
           match_id: number
           points?: number
@@ -128,7 +132,9 @@ export type Database = {
         }
         Update: {
           away_goals?: number
+          away_pens?: number | null
           home_goals?: number
+          home_pens?: number | null
           id?: number
           match_id?: number
           points?: number
@@ -155,9 +161,11 @@ export type Database = {
       matches: {
         Row: {
           away_goals: number | null
+          away_pens: number | null
           away_team_id: number | null
           group_code: string | null
           home_goals: number | null
+          home_pens: number | null
           home_team_id: number | null
           id: number
           match_date: string | null
@@ -167,9 +175,11 @@ export type Database = {
         }
         Insert: {
           away_goals?: number | null
+          away_pens?: number | null
           away_team_id?: number | null
           group_code?: string | null
           home_goals?: number | null
+          home_pens?: number | null
           home_team_id?: number | null
           id?: number
           match_date?: string | null
@@ -179,9 +189,11 @@ export type Database = {
         }
         Update: {
           away_goals?: number | null
+          away_pens?: number | null
           away_team_id?: number | null
           group_code?: string | null
           home_goals?: number | null
+          home_pens?: number | null
           home_team_id?: number | null
           id?: number
           match_date?: string | null

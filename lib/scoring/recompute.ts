@@ -31,11 +31,13 @@ export async function recomputeScores(): Promise<RecomputeResult> {
     supabase
       .from("matches")
       .select(
-        "id, group_code, home_team_id, away_team_id, home_goals, away_goals, status",
+        "id, match_no, group_code, home_team_id, away_team_id, home_goals, away_goals, home_pens, away_pens, status",
       ),
     supabase
       .from("match_predictions")
-      .select("id, user_id, match_id, home_goals, away_goals"),
+      .select(
+        "id, user_id, match_id, home_goals, away_goals, home_pens, away_pens",
+      ),
     supabase
       .from("group_table_predictions")
       .select("id, user_id, group_code, team_id, predicted_rank"),
@@ -49,12 +51,15 @@ export async function recomputeScores(): Promise<RecomputeResult> {
 
   const matches: ScoringMatch[] = (matchesRes.data ?? []).map((m) => ({
     id: m.id,
+    match_no: m.match_no,
     // Knockout rows now carry null here; deriveActualStandings skips them.
     group_code: m.group_code,
     home_team_id: m.home_team_id,
     away_team_id: m.away_team_id,
     home_goals: m.home_goals,
     away_goals: m.away_goals,
+    home_pens: m.home_pens,
+    away_pens: m.away_pens,
     status: m.status === "finished" ? "finished" : "scheduled",
   }));
   const matchById = new Map(matches.map((m) => [m.id, m] as const));
@@ -67,8 +72,20 @@ export async function recomputeScores(): Promise<RecomputeResult> {
     const m = matchById.get(p.match_id);
     const points =
       scoreOneMatchPrediction(
-        { home_goals: p.home_goals, away_goals: p.away_goals },
-        m ?? { status: "scheduled", home_goals: null, away_goals: null },
+        {
+          home_goals: p.home_goals,
+          away_goals: p.away_goals,
+          home_pens: p.home_pens,
+          away_pens: p.away_pens,
+        },
+        m ?? {
+          status: "scheduled",
+          home_goals: null,
+          away_goals: null,
+          home_pens: null,
+          away_pens: null,
+          match_no: 0,
+        },
       ) ?? 0;
     return {
       id: p.id,
@@ -76,6 +93,8 @@ export async function recomputeScores(): Promise<RecomputeResult> {
       match_id: p.match_id,
       home_goals: p.home_goals,
       away_goals: p.away_goals,
+      home_pens: p.home_pens,
+      away_pens: p.away_pens,
       points,
     };
   });

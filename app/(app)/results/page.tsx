@@ -33,7 +33,7 @@ export default async function ResultsPage() {
     supabase
       .from("matches")
       .select(
-        "id, match_no, group_code, match_date, home_team_id, away_team_id, home_goals, away_goals, status, predictions_locked",
+        "id, match_no, group_code, match_date, home_team_id, away_team_id, home_goals, away_goals, home_pens, away_pens, status, predictions_locked",
       )
       .order("match_no"),
   ]);
@@ -62,6 +62,8 @@ export default async function ResultsPage() {
       m.away_team_id != null ? teamsById.get(m.away_team_id) ?? null : null,
     homeGoals: m.home_goals,
     awayGoals: m.away_goals,
+    homePens: m.home_pens,
+    awayPens: m.away_pens,
     status: m.status === "finished" ? "finished" : "scheduled",
     predictionsLocked: m.predictions_locked,
   }));

@@ -24,7 +24,7 @@ export default async function MatchesPage() {
       .order("match_no"),
     supabase
       .from("match_predictions")
-      .select("match_id, home_goals, away_goals")
+      .select("match_id, home_goals, away_goals, home_pens, away_pens")
       .eq("user_id", user.id),
     supabase.from("settings").select("lock_at").eq("id", 1).single(),
   ]);
@@ -49,7 +49,12 @@ export default async function MatchesPage() {
 
   const predictions: Record<number, MatchPrediction> = {};
   for (const p of predictionsRes.data ?? []) {
-    predictions[p.match_id] = { home: p.home_goals, away: p.away_goals };
+    predictions[p.match_id] = {
+      home: p.home_goals,
+      away: p.away_goals,
+      homePens: p.home_pens,
+      awayPens: p.away_pens,
+    };
   }
 
   const lockAt = settingsRes.data?.lock_at ?? null;
