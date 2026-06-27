@@ -6,7 +6,8 @@ import { SectionCard } from "@/components/section-card";
 import { StatPill } from "@/components/stat-pill";
 import { Countdown } from "@/components/countdown";
 import { LockedBanner } from "@/components/locked-banner";
-import { Goal, ListOrdered, Trophy } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ArrowRight, Goal, ListOrdered, Sparkles, Trophy } from "lucide-react";
 
 const TOTAL_MATCHES = 72;
 const TOTAL_GROUPS = 12;
@@ -18,31 +19,60 @@ export default async function Home() {
   } = await supabase.auth.getUser();
   if (!user) return null; // proxy + layout already gate this
 
-  const [{ data: profile }, { data: settings }, matchCountRes, groupCountRes] =
-    await Promise.all([
-      supabase
-        .from("profiles")
-        .select("display_name")
-        .eq("id", user.id)
-        .single(),
-      supabase.from("settings").select("lock_at").eq("id", 1).single(),
-      // Inner-join against matches so we only count predictions on group-stage
-      // fixtures — the TOTAL_MATCHES denominator below is fixed at 72.
-      supabase
-        .from("match_predictions")
-        .select("id, matches!inner(match_no)", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .lte("matches.match_no", 72),
-      supabase
-        .from("group_table_predictions")
-        .select("group_code", { count: "exact", head: false })
-        .eq("user_id", user.id),
-    ]);
+  const [
+    { data: profile },
+    { data: settings },
+    matchCountRes,
+    groupCountRes,
+    knockoutTotalRes,
+    knockoutDoneRes,
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", user.id)
+      .single(),
+    supabase.from("settings").select("lock_at").eq("id", 1).single(),
+    // Inner-join against matches so we only count predictions on group-stage
+    // fixtures — the TOTAL_MATCHES denominator below is fixed at 72.
+    supabase
+      .from("match_predictions")
+      .select("id, matches!inner(match_no)", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .lte("matches.match_no", 72),
+    supabase
+      .from("group_table_predictions")
+      .select("group_code", { count: "exact", head: false })
+      .eq("user_id", user.id),
+    // Confirmed knockout fixtures: both teams + a date are set.
+    supabase
+      .from("matches")
+      .select("id", { count: "exact", head: true })
+      .gt("match_no", 72)
+      .not("home_team_id", "is", null)
+      .not("away_team_id", "is", null)
+      .not("match_date", "is", null),
+    // User's predictions on confirmed knockout fixtures.
+    supabase
+      .from("match_predictions")
+      .select(
+        "id, matches!inner(match_no, home_team_id, away_team_id, match_date)",
+        { count: "exact", head: true },
+      )
+      .eq("user_id", user.id)
+      .gt("matches.match_no", 72)
+      .not("matches.home_team_id", "is", null)
+      .not("matches.away_team_id", "is", null)
+      .not("matches.match_date", "is", null),
+  ]);
 
   const firstName = profile?.display_name.split(/\s+/)[0] ?? "there";
   const matchesDone = matchCountRes.count ?? 0;
   const groupsDone =
     new Set((groupCountRes.data ?? []).map((row) => row.group_code)).size;
+  const knockoutTotal = knockoutTotalRes.count ?? 0;
+  const knockoutDone = knockoutDoneRes.count ?? 0;
+  const knockoutToGo = Math.max(knockoutTotal - knockoutDone, 0);
 
   const lockAt = settings?.lock_at ? new Date(settings.lock_at) : null;
   const isLocked = lockAt ? Date.now() >= lockAt.getTime() : false;
@@ -56,11 +86,19 @@ export default async function Home() {
       />
 
       {isLocked && lockAt ? (
-        <LockedBanner
-          lockedAt={lockAt}
-          title="Group stage is locked"
-          message="Group-stage and group-table predictions are frozen. Knockout matches are still open — predict each one before kickoff on the Matches page."
-        />
+        <div className="space-y-3">
+          <LockedBanner
+            lockedAt={lockAt}
+            title="Group stage is locked"
+            message="Group-stage and group-table predictions are frozen."
+          />
+          {knockoutTotal > 0 && (
+            <KnockoutOpenCard
+              total={knockoutTotal}
+              toGo={knockoutToGo}
+            />
+          )}
+        </div>
       ) : (
         <SectionCard
           title="Time to lock"
@@ -99,10 +137,10 @@ export default async function Home() {
             </Button>
           </div>
         }
-        contentClassName="grid gap-3 sm:grid-cols-2"
+        contentClassName="grid gap-3 sm:grid-cols-3"
       >
         <StatPill
-          label="Matches predicted"
+          label="Group matches predicted"
           value={`${matchesDone} / ${TOTAL_MATCHES}`}
           hint={
             matchesDone === TOTAL_MATCHES
@@ -120,6 +158,24 @@ export default async function Home() {
               : `${TOTAL_GROUPS - groupsDone} to rank`
           }
           variant={groupsDone === TOTAL_GROUPS ? "success" : "default"}
+        />
+        <StatPill
+          label="Knockout matches predicted"
+          value={
+            knockoutTotal === 0
+              ? "—"
+              : `${knockoutDone} / ${knockoutTotal}`
+          }
+          hint={
+            knockoutTotal === 0
+              ? "Fixtures appear as the bracket is confirmed."
+              : knockoutToGo === 0
+                ? "All confirmed fixtures in."
+                : `${knockoutToGo} ${knockoutToGo === 1 ? "match" : "matches"} to predict`
+          }
+          variant={
+            knockoutTotal > 0 && knockoutToGo === 0 ? "success" : "default"
+          }
         />
       </SectionCard>
 
@@ -144,6 +200,47 @@ export default async function Home() {
         />
       </div>
     </main>
+  );
+}
+
+function KnockoutOpenCard({
+  total,
+  toGo,
+}: {
+  total: number;
+  toGo: number;
+}) {
+  const allIn = toGo === 0;
+  return (
+    <Link
+      href="/matches"
+      className={cn(
+        "group flex items-center gap-3 rounded-lg border bg-success/10 px-4 py-3 text-sm transition-colors",
+        "border-success/40 hover:bg-success/15",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success",
+      )}
+    >
+      <span
+        aria-hidden
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-success/20 text-success"
+      >
+        <Sparkles className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold text-success">
+          Knockout predictions are open
+        </p>
+        <p className="text-locked-foreground">
+          {allIn
+            ? `All ${total} confirmed fixture${total === 1 ? "" : "s"} predicted. Watch for new matchups as the bracket fills in.`
+            : `${toGo} of ${total} confirmed ${toGo === 1 ? "fixture is" : "fixtures are"} waiting on your prediction.`}
+        </p>
+      </div>
+      <ArrowRight
+        aria-hidden
+        className="h-4 w-4 shrink-0 text-success transition-transform group-hover:translate-x-0.5"
+      />
+    </Link>
   );
 }
 

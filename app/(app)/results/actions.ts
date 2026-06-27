@@ -157,6 +157,45 @@ export async function setKnockoutTeams(
   return { ok: true };
 }
 
+export async function setKnockoutDate(
+  matchId: number,
+  dateISO: string | null,
+): Promise<ActionResult> {
+  if (!Number.isInteger(matchId)) {
+    return { ok: false, error: "Invalid match id" };
+  }
+  // Accept "" / null as "clear the date". Otherwise require YYYY-MM-DD.
+  let normalized: string | null = null;
+  if (dateISO != null && dateISO !== "") {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateISO)) {
+      return { ok: false, error: "Date must be YYYY-MM-DD" };
+    }
+    normalized = dateISO;
+  }
+
+  const { supabase, error: adminError } = await requireAdmin();
+  if (adminError) return { ok: false, error: adminError };
+
+  const { data: existing, error: readErr } = await supabase
+    .from("matches")
+    .select("match_no")
+    .eq("id", matchId)
+    .single();
+  if (readErr) return { ok: false, error: readErr.message };
+  if ((existing?.match_no ?? 0) <= 72) {
+    return { ok: false, error: "Group-stage dates are fixed by the seed." };
+  }
+
+  const { error } = await supabase
+    .from("matches")
+    .update({ match_date: normalized })
+    .eq("id", matchId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export async function clearMatchResult(matchId: number): Promise<ActionResult> {
   if (!Number.isInteger(matchId)) {
     return { ok: false, error: "Invalid match id" };

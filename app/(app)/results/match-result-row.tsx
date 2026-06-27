@@ -11,6 +11,7 @@ import {
   clearMatchResult,
   setMatchPredictionLock,
   setKnockoutTeams,
+  setKnockoutDate,
 } from "./actions";
 import type { AdminMatchData, TeamOption } from "./match-results-editor";
 
@@ -50,11 +51,16 @@ export function MatchResultRow({ match, dateLabel, teamOptions }: Props) {
   const [homeTeamId, setHomeTeamId] = useState<number | null>(match.homeTeamId);
   const [awayTeamId, setAwayTeamId] = useState<number | null>(match.awayTeamId);
   const [teamPending, startTeamTransition] = useTransition();
+  // Date input uses YYYY-MM-DD; same shape as `matches.match_date` (a Postgres
+  // `date`). Empty string = no date set yet.
+  const [dateValue, setDateValue] = useState<string>(match.date ?? "");
+  const [datePending, startDateTransition] = useTransition();
 
   const isKnockout = match.round !== "GROUP";
   const teamsAssigned = homeTeamId != null && awayTeamId != null;
   const teamsDirty =
     homeTeamId !== match.homeTeamId || awayTeamId !== match.awayTeamId;
+  const dateDirty = dateValue !== (match.date ?? "");
 
   const homeTeamName =
     teamOptions?.find((t) => t.id === homeTeamId)?.name ?? match.homeTeamName;
@@ -105,6 +111,22 @@ export function MatchResultRow({ match, dateLabel, teamOptions }: Props) {
         );
       } else {
         toast.error("Couldn't update lock", { description: result.error });
+      }
+    });
+  }
+
+  function handleSaveDate() {
+    if (!dateDirty) return;
+    startDateTransition(async () => {
+      const result = await setKnockoutDate(
+        match.id,
+        dateValue === "" ? null : dateValue,
+      );
+      if (result.ok) {
+        toast.success("Match date updated");
+      } else {
+        toast.error("Couldn't save date", { description: result.error });
+        setDateValue(match.date ?? "");
       }
     });
   }
@@ -186,39 +208,68 @@ export function MatchResultRow({ match, dateLabel, teamOptions }: Props) {
       </div>
 
       {isKnockout && teamOptions && (
-        <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-          <TeamPicker
-            label="Home team"
-            value={homeTeamId}
-            options={teamOptions}
-            excludeId={awayTeamId}
-            disabled={teamPending}
-            onChange={setHomeTeamId}
-          />
-          <span className="hidden text-center text-xs font-medium uppercase tracking-wider text-muted-foreground sm:block">
-            vs
-          </span>
-          <TeamPicker
-            label="Away team"
-            value={awayTeamId}
-            options={teamOptions}
-            excludeId={homeTeamId}
-            disabled={teamPending}
-            onChange={setAwayTeamId}
-          />
-          {teamsDirty && (
-            <div className="sm:col-span-3 flex justify-end">
+        <div className="mb-3 space-y-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+            <TeamPicker
+              label="Home team"
+              value={homeTeamId}
+              options={teamOptions}
+              excludeId={awayTeamId}
+              disabled={teamPending}
+              onChange={setHomeTeamId}
+            />
+            <span className="hidden text-center text-xs font-medium uppercase tracking-wider text-muted-foreground sm:block">
+              vs
+            </span>
+            <TeamPicker
+              label="Away team"
+              value={awayTeamId}
+              options={teamOptions}
+              excludeId={homeTeamId}
+              disabled={teamPending}
+              onChange={setAwayTeamId}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              Match date
+              <input
+                type="date"
+                aria-label={`Match #${match.matchNo} date`}
+                value={dateValue}
+                disabled={datePending}
+                onChange={(e) => setDateValue(e.target.value)}
+                className={cn(
+                  "h-9 rounded-md border bg-background px-2 text-sm",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "disabled:cursor-not-allowed disabled:opacity-60",
+                )}
+              />
+            </label>
+            {dateDirty && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={datePending}
+                onClick={handleSaveDate}
+              >
+                {datePending ? "Saving…" : "Save date"}
+              </Button>
+            )}
+            {teamsDirty && (
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
                 disabled={teamPending}
                 onClick={handleSaveTeams}
+                className="ml-auto"
               >
                 {teamPending ? "Saving…" : "Save matchup"}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 

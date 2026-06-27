@@ -61,9 +61,11 @@ function formatDate(iso: string | null): string {
   return DATE_FMT.format(new Date(iso));
 }
 
-// A knockout match becomes predictable only when both opponents are set.
+// A knockout match becomes predictable only when both opponents AND the
+// kickoff date are set. Half-filled rows would just confuse players, so the
+// player view hides them entirely until admin completes them.
 function isPredictable(m: MatchData): boolean {
-  return m.homeTeamName != null && m.awayTeamName != null;
+  return m.homeTeamName != null && m.awayTeamName != null && m.date != null;
 }
 
 export function MatchPredictor({
@@ -293,13 +295,14 @@ function KnockoutView({
     return map;
   }, [matches]);
 
-  // Default to the first round that has at least one match. Today that's R32;
-  // later we can extend without changing this logic.
-  const firstWithMatches =
-    KNOCKOUT_ROUNDS.find((r) => (matchesByRound.get(r) ?? []).length > 0) ?? "R32";
+  // Default to the first round that has at least one confirmed fixture.
+  const firstWithConfirmed =
+    KNOCKOUT_ROUNDS.find(
+      (r) => (matchesByRound.get(r) ?? []).some(isPredictable),
+    ) ?? "R32";
 
-  // If we don't have any knockout rows at all, fall back to a friendly empty state.
-  if (matches.length === 0) {
+  // No confirmed fixtures across any round → friendly empty state.
+  if (!matches.some(isPredictable)) {
     return (
       <div className="rounded-lg border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">
         Knockout fixtures will appear here as the bracket fills in.
@@ -308,12 +311,13 @@ function KnockoutView({
   }
 
   return (
-    <Tabs defaultValue={firstWithMatches} className="gap-3">
+    <Tabs defaultValue={firstWithConfirmed} className="gap-3">
       <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
         <TabsList className="inline-flex w-auto">
           {KNOCKOUT_ROUNDS.map((r) => {
-            const rounds = matchesByRound.get(r) ?? [];
-            const predictableHere = rounds.filter(isPredictable);
+            const predictableHere = (matchesByRound.get(r) ?? []).filter(
+              isPredictable,
+            );
             const doneHere = predictableHere.filter((m) =>
               predicted.has(m.id),
             ).length;
@@ -321,7 +325,12 @@ function KnockoutView({
               predictableHere.length > 0 &&
               doneHere === predictableHere.length;
             return (
-              <TabsTrigger key={r} value={r} className="gap-1.5" disabled={rounds.length === 0}>
+              <TabsTrigger
+                key={r}
+                value={r}
+                className="gap-1.5"
+                disabled={predictableHere.length === 0}
+              >
                 <span className="font-semibold">{ROUND_SHORT[r]}</span>
                 {predictableHere.length > 0 && (
                   <span
@@ -339,23 +348,24 @@ function KnockoutView({
       </div>
 
       {KNOCKOUT_ROUNDS.map((r) => {
-        const rounds = matchesByRound.get(r) ?? [];
+        // Player view only shows fully-defined fixtures (both teams + date).
+        // Half-filled rows live on /results so admin can complete them.
+        const visible = (matchesByRound.get(r) ?? []).filter(isPredictable);
         return (
           <TabsContent key={r} value={r} className="space-y-3">
-            {rounds.length === 0 ? (
+            {visible.length === 0 ? (
               <div className="rounded-lg border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">
-                No fixtures yet for this round.
+                No confirmed fixtures for this round yet.
               </div>
             ) : (
-              rounds.map((m) => (
+              visible.map((m) => (
                 <MatchRow
                   key={m.id}
                   match={m}
                   dateLabel={formatDate(m.date)}
                   initial={initialPredictions[m.id]}
-                  locked={m.predictionsLocked || !isPredictable(m)}
+                  locked={m.predictionsLocked}
                   matchLocked={m.predictionsLocked}
-                  tbd={!isPredictable(m)}
                   onPredictionStateChange={onPredictionStateChange}
                 />
               ))
